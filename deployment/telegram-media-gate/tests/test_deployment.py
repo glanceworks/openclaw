@@ -20,9 +20,37 @@ WRAPPER = DEPLOYMENT / "entrypoint.sh"
 EVIDENCE = DEPLOYMENT / "evidence/known-good-image-20260713T045521Z.json"
 REGISTRY_EVIDENCE = DEPLOYMENT / "evidence/registry-openclaw-2026.5.4-20260713T163330Z.json"
 DOCKERFILE = DEPLOYMENT.parents[1] / "Dockerfile.playwright-runtime"
+COMPOSE = DEPLOYMENT.parents[1] / "docker-compose.yml"
+EXPECTED_IMAGE_ENTRYPOINT = (
+    'ENTRYPOINT ["/opt/openclaw-telegram-media-gate/deployment/entrypoint.sh"]'
+)
+EXPECTED_IMAGE_CMD = 'CMD ["node", "openclaw.mjs", "gateway", "--allow-unconfigured"]'
+EXPECTED_WRAPPER_DELEGATION = 'exec docker-entrypoint.sh "$@"'
 
 def sha(data: bytes) -> str:
     return hashlib.sha256(data).hexdigest()
+
+def assert_image_command_contract(dockerfile: str, compose: str, wrapper: str) -> None:
+    entrypoints = [
+        line.strip() for line in dockerfile.splitlines()
+        if re.match(r"^\s*ENTRYPOINT(?:\s|$)", line)
+    ]
+    if entrypoints != [EXPECTED_IMAGE_ENTRYPOINT]:
+        raise AssertionError(f"unexpected image ENTRYPOINT: {entrypoints!r}")
+    commands = [
+        line.strip() for line in dockerfile.splitlines()
+        if re.match(r"^\s*CMD(?:\s|$)", line)
+    ]
+    if commands != [EXPECTED_IMAGE_CMD]:
+        raise AssertionError(f"unexpected image CMD: {commands!r}")
+    if re.search(r"^\s*command\s*:", compose, re.MULTILINE):
+        raise AssertionError("Compose must not override the image command")
+    delegations = [
+        line.strip() for line in wrapper.splitlines()
+        if re.match(r"^\s*exec\s+docker-entrypoint\.sh(?:\s|$)", line)
+    ]
+    if delegations != [EXPECTED_WRAPPER_DELEGATION]:
+        raise AssertionError(f"unexpected wrapper delegation: {delegations!r}")
 
 class DeploymentFrameworkTests(unittest.TestCase):
     def setUp(self):
@@ -499,6 +527,44 @@ class DeploymentFrameworkTests(unittest.TestCase):
             dockerfile.index("validate_readiness.py"),
             dockerfile.index("patch_bundle.py"),
         )
+
+    def test_image_command_contract_is_explicit_and_compose_does_not_override(self):
+        assert_image_command_contract(
+            DOCKERFILE.read_text(),
+            COMPOSE.read_text(),
+            WRAPPER.read_text(),
+        )
+
+    def test_image_command_contract_rejects_invalid_static_variants(self):
+        dockerfile = DOCKERFILE.read_text()
+        compose = COMPOSE.read_text()
+        wrapper = WRAPPER.read_text()
+        invalid_dockerfiles = {
+            "missing CMD": dockerfile.replace(EXPECTED_IMAGE_CMD + "\n", "", 1),
+            "shell-form CMD": dockerfile.replace(
+                EXPECTED_IMAGE_CMD,
+                "CMD node openclaw.mjs gateway --allow-unconfigured",
+                1,
+            ),
+            "wrong CMD arguments": dockerfile.replace(
+                EXPECTED_IMAGE_CMD,
+                'CMD ["node", "openclaw.mjs", "gateway"]',
+                1,
+            ),
+        }
+        for case, invalid in invalid_dockerfiles.items():
+            with self.subTest(case=case):
+                with self.assertRaisesRegex(AssertionError, "CMD"):
+                    assert_image_command_contract(invalid, compose, wrapper)
+
+        compose_override = compose + (
+            "\n# Synthetic invalid fixture\n"
+            "services:\n"
+            "  openclaw-gateway:\n"
+            "    command: [\"node\", \"openclaw.mjs\"]\n"
+        )
+        with self.assertRaisesRegex(AssertionError, "must not override"):
+            assert_image_command_contract(dockerfile, compose_override, wrapper)
 
     def test_local_image_id_cannot_be_used_as_upstream_digest(self):
         manifest = load_manifest(MANIFEST)

@@ -60,12 +60,19 @@ Before any future build:
 Only after separate authorization:
 
 1. Build only the `openclaw-gateway` image through the reviewed Compose file.
-2. Inspect image identity, user, entrypoint, inherited command, runtime hashes,
-   version evidence, and patched bundle hash.
-3. Confirm `/app/dist` was patched at build time and is not runtime-writable.
-4. Confirm the wrapper only verifies and then delegates to
-   `docker-entrypoint.sh`.
-5. Confirm bind-mounted state remains writable by numeric UID/GID `1001:1001`.
+2. Inspect image identity, user, runtime hashes, version evidence, and patched
+   bundle hash.
+3. Require the exact guarded entrypoint array:
+   `["/opt/openclaw-telegram-media-gate/deployment/entrypoint.sh"]`.
+4. Require the exact explicit command array:
+   `["node", "openclaw.mjs", "gateway", "--allow-unconfigured"]`. The pinned
+   upstream OpenClaw `2026.5.4` image was observed with `Config.Cmd = null`;
+   the custom image supplies this command.
+5. Confirm Compose does not override the image command.
+6. Confirm `/app/dist` was patched at build time and is not runtime-writable.
+7. Confirm the guarded wrapper only verifies and then delegates with
+   `exec docker-entrypoint.sh "$@"`.
+8. Confirm bind-mounted state remains writable by numeric UID/GID `1001:1001`.
 
 ## 6. Future gateway-only activation and validation
 

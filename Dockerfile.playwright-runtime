@@ -51,3 +51,4 @@ RUN python3 /opt/openclaw-telegram-media-gate/deployment/tools/validate_base_ima
 USER node
 
 ENTRYPOINT ["/opt/openclaw-telegram-media-gate/deployment/entrypoint.sh"]
+CMD ["node", "openclaw.mjs", "gateway", "--allow-unconfigured"]

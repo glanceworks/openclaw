@@ -32,7 +32,9 @@ is rollback evidence for the local host only and is neither registry digest.
 Explicit manual authorization is still required, and a durable rollback tag must
 be recorded before the first build.
 
-The checked-in upstream Dockerfile supplies the inherited command
-`node openclaw.mjs gateway --allow-unconfigured`. This integration intentionally
-does not replace it: the deployment entrypoint verifies the built image and then
-delegates to `docker-entrypoint.sh` with the inherited command arguments intact.
+The pinned upstream OpenClaw `2026.5.4` image was observed with
+`Config.Cmd = null`. The custom image therefore explicitly defines
+`node openclaw.mjs gateway --allow-unconfigured`. Its guarded entrypoint verifies
+the built image and delegates with `exec docker-entrypoint.sh "$@"`. Compose
+intentionally does not override the command, leaving the image with a complete,
+inspectable command contract.
