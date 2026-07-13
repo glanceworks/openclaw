@@ -1,0 +1,139 @@
+{
+  "schema_version": "1.0.0",
+  "expected_openclaw_version": "2026.5.4",
+  "runtime_source_commit": "580007d45bd4e903d829d1f17ed61dd4341e0dcd",
+  "patch_provenance_commit": "6049d34d751333d8d0dd6a77d506c9a42d19d495",
+  "archive_sha256": "97de9b43bc680614b28ce33d245ece5a0df8bbb91af3b8662ccafe9a330a676e",
+  "runtime_files": [
+    {
+      "source_path": "runtime/scripts/telegram-media-gate.mjs",
+      "image_relative_path": "scripts/telegram-media-gate.mjs",
+      "sha256": "017a144b0ef83fe66dfe5e5f2761f545334939c7850245aead8f5a48b503010b"
+    },
+    {
+      "source_path": "runtime/scripts/telegram-media-handler.mjs",
+      "image_relative_path": "scripts/telegram-media-handler.mjs",
+      "sha256": "7c17d1d81fe0df9b96963fd6b7afc7f7a8dbe48dd040b5a1a3fcff0c935c241e"
+    },
+    {
+      "source_path": "runtime/scripts/telegram-media-invite.mjs",
+      "image_relative_path": "scripts/telegram-media-invite.mjs",
+      "sha256": "2dcb9b6c8c04e81156fcd566e9990746fe9a77c2351ac2df6b6b0ecbd6265d9f"
+    },
+    {
+      "source_path": "runtime/scripts/telegram-media-command-registry.mjs",
+      "image_relative_path": "scripts/telegram-media-command-registry.mjs",
+      "sha256": "b45af6ec26b2c47928587aefbf73eb86180cd493cfb56f8f564700e58f59ec45"
+    },
+    {
+      "source_path": "runtime/scripts/telegram-media-paths.mjs",
+      "image_relative_path": "scripts/telegram-media-paths.mjs",
+      "sha256": "d2d2d15cd407f14e3a93783459d3faff9003360feb4b57158df1a1f4a6fe61d2"
+    },
+    {
+      "source_path": "runtime/scripts/media-mvp-add-gated.mjs",
+      "image_relative_path": "scripts/media-mvp-add-gated.mjs",
+      "sha256": "1266ed075484704350d1ea29105a93994f14dd55b25a16a08835fe31e1e67da0"
+    },
+    {
+      "source_path": "runtime/scripts/media-mvp-resolve.mjs",
+      "image_relative_path": "scripts/media-mvp-resolve.mjs",
+      "sha256": "bce480e8c08609fed1e1a10d807912aae23988cee37045920fd3b7546f174e17"
+    },
+    {
+      "source_path": "runtime/config/telegram-media-commands.json",
+      "image_relative_path": "config/telegram-media-commands.json",
+      "sha256": "ead5697a422498513a46bd05275490958b5219023c9d68b66f189cca90639cf5"
+    }
+  ],
+  "image_owned_runtime_root": "/opt/openclaw-telegram-media-gate",
+  "default_mutable_data_root": "/home/node/.openclaw/workspace-coordinator",
+  "data_root_environment_variable": "OPENCLAW_TELEGRAM_MEDIA_DATA_ROOT",
+  "patched_import_url": "file:///opt/openclaw-telegram-media-gate/scripts/telegram-media-gate.mjs",
+  "upstream_base_image": {
+    "repository": "ghcr.io/openclaw/openclaw",
+    "version": "2026.5.4",
+    "registry_index_digest": "sha256:7f4dfd4ed0d5469a4f12eccaa5f46b0c70fca802806be625dce782e69203e689",
+    "verified_manifest_digest": "sha256:69895e31e3c36030b465b364365e9a22160737b000a0712082c7278e18f80e56",
+    "verified_manifest_digest_kind": "platform-manifest",
+    "selected_platform": {
+      "os": "linux",
+      "architecture": "amd64"
+    },
+    "reference": "ghcr.io/openclaw/openclaw:2026.5.4@sha256:69895e31e3c36030b465b364365e9a22160737b000a0712082c7278e18f80e56",
+    "evidence_record": "evidence/registry-openclaw-2026.5.4-20260713T163330Z.json",
+    "local_known_good_image_id": "sha256:142bc42a1333464142bb252e177bd5702f042f89645b7b22988c7f9d3e017bb2",
+    "local_image_id_role": "rollback evidence only; not an upstream registry digest"
+  },
+  "version_probe": {
+    "expected": "2026.5.4",
+    "contract": {
+      "kind": "json-file",
+      "path": "package.json",
+      "checks": [
+        {
+          "field_path": [
+            "name"
+          ],
+          "expected": "openclaw"
+        },
+        {
+          "field_path": [
+            "version"
+          ],
+          "expected": "2026.5.4"
+        }
+      ]
+    },
+    "evidence": {
+      "record": "evidence/known-good-image-20260713T045521Z.json",
+      "source_path": "image-copy/package.json",
+      "sha256": "ebfe4600fb2e0f50f28824cf39ea97e47a361f03059b662af704ee61ed6a1206"
+    }
+  },
+  "bundle": {
+    "selector": {
+      "kind": "content-counts",
+      "pattern": "*.js",
+      "needles": [
+        {
+          "text": "const handleInboundMessageLike = async (event) => {",
+          "expected_count": 1
+        },
+        {
+          "text": "await processInboundMessage({",
+          "expected_count": 1
+        },
+        {
+          "text": "bot.on(\"message\", async (ctx) => {",
+          "expected_count": 1
+        },
+        {
+          "text": "createTelegramBot",
+          "expected_count": 4
+        }
+      ]
+    },
+    "expected_path": "bot-D-7bCSXH.js",
+    "original_sha256": "31f372aa5527d3db4769f3ac0c53547b395fb37defd70e62b5655a823f0e861b",
+    "patched_sha256": "4b37c23bc7e335d4768f4d22f83ccacf7a204773e759522d25065d3b39d436a5",
+    "structural_anchors": [
+      {
+        "name": "telegram_dedupe_helper",
+        "text": "const createTelegramUpdateDedupe = () => createDedupeCache({\n\tttlMs: RECENT_TELEGRAM_UPDATE_TTL_MS,\n\tmaxSize: RECENT_TELEGRAM_UPDATE_MAX\n});\n",
+        "expected_count": 1
+      },
+      {
+        "name": "inbound_message_handoff",
+        "text": "\t\t\tawait processInboundMessage({\n\t\t\t\tctx: event.ctx,\n\t\t\t\tmsg: event.msg,\n\t\t\t\tchatId: event.chatId,\n\t\t\t\tresolvedThreadId,\n\t\t\t\tdmThreadId,\n\t\t\t\tstoreAllowFrom,\n\t\t\t\tsendOversizeWarning: event.sendOversizeWarning,\n\t\t\t\toversizeLogMessage: event.oversizeLogMessage\n\t\t\t});",
+        "expected_count": 1
+      }
+    ]
+  },
+  "patch": {
+    "marker": "OPENCLAW_TELEGRAM_MEDIA_GATE_PATCH_V2",
+    "helper_anchor_name": "telegram_dedupe_helper",
+    "handoff_anchor_name": "inbound_message_handoff",
+    "module_import_url": "file:///opt/openclaw-telegram-media-gate/scripts/telegram-media-gate.mjs"
+  }
+}

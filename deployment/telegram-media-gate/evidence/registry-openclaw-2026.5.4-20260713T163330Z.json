@@ -1,0 +1,47 @@
+{
+  "schema_version": "1.0.0",
+  "collection_timestamp": "2026-07-13T16:33:30Z",
+  "collection": {
+    "archive_name": "openclaw-registry-2026.5.4-20260713T163330Z.tar.gz",
+    "archive_sha256": "ab516262727b0e2e8440706674b77d39fd0297c6cf4c957bee3d4affd3259e10",
+    "method": "docker buildx imagetools inspect",
+    "nonself_evidence_hashes_verified": 10,
+    "hash_manifest_self_entry": {
+      "recorded_sha256": "834ff8703991ed56aaa71d0a349d351fa3b593780030616266c878bc9d0021c3",
+      "actual_sha256": "a1ee7508b643a7ec8bef4572cef2bd89bcb3f3a05f53340d02ecf890c5de0238",
+      "match": false
+    },
+    "image_pulled": false,
+    "image_built": false,
+    "container_changed": false,
+    "compose_service_changed": false
+  },
+  "registry": {
+    "repository": "ghcr.io/openclaw/openclaw",
+    "tag": "2026.5.4",
+    "tag_reference": "ghcr.io/openclaw/openclaw:2026.5.4",
+    "index": {
+      "media_type": "application/vnd.oci.image.index.v1+json",
+      "digest": "sha256:7f4dfd4ed0d5469a4f12eccaa5f46b0c70fca802806be625dce782e69203e689",
+      "descriptor_count": 4
+    },
+    "target_platform": {
+      "os": "linux",
+      "architecture": "amd64",
+      "matching_descriptor_count": 1
+    },
+    "platform_manifest": {
+      "media_type": "application/vnd.oci.image.manifest.v1+json",
+      "size": 4660,
+      "digest": "sha256:69895e31e3c36030b465b364365e9a22160737b000a0712082c7278e18f80e56",
+      "independently_inspected": true
+    },
+    "approved_base_reference": "ghcr.io/openclaw/openclaw:2026.5.4@sha256:69895e31e3c36030b465b364365e9a22160737b000a0712082c7278e18f80e56"
+  },
+  "digest_roles": {
+    "registry_index_digest": "multi-platform provenance; not the build pin",
+    "platform_manifest_digest": "exact linux/amd64 build pin",
+    "local_image_id": "sha256:142bc42a1333464142bb252e177bd5702f042f89645b7b22988c7f9d3e017bb2",
+    "local_image_id_role": "rollback evidence only; not an upstream registry digest"
+  }
+}

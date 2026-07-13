@@ -1,0 +1,146 @@
+{
+  "export_schema_version": "1.0.0",
+  "export_creation_timestamp": "2026-07-12T22:37:17+00:00",
+  "runtime_source_commit": "580007d45bd4e903d829d1f17ed61dd4341e0dcd",
+  "patch_reference_commit": "6049d34d751333d8d0dd6a77d506c9a42d19d495",
+  "intended_eventual_image_owned_root": "/opt/openclaw-telegram-media-gate",
+  "mutable_data_default_root": "/home/node/.openclaw/workspace-coordinator",
+  "mutable_data_override": "OPENCLAW_TELEGRAM_MEDIA_DATA_ROOT",
+  "files": [
+    {
+      "export_relative_path": "payload/runtime/scripts/telegram-media-gate.mjs",
+      "original_repository_path": "scripts/telegram-media-gate.mjs",
+      "source_commit": "580007d45bd4e903d829d1f17ed61dd4341e0dcd",
+      "classification": "runtime",
+      "byte_size": 5922,
+      "sha256": "017a144b0ef83fe66dfe5e5f2761f545334939c7850245aead8f5a48b503010b",
+      "intended_final_use": "candidate immutable image runtime source or immutable metadata"
+    },
+    {
+      "export_relative_path": "payload/runtime/scripts/telegram-media-handler.mjs",
+      "original_repository_path": "scripts/telegram-media-handler.mjs",
+      "source_commit": "580007d45bd4e903d829d1f17ed61dd4341e0dcd",
+      "classification": "runtime",
+      "byte_size": 11854,
+      "sha256": "7c17d1d81fe0df9b96963fd6b7afc7f7a8dbe48dd040b5a1a3fcff0c935c241e",
+      "intended_final_use": "candidate immutable image runtime source or immutable metadata"
+    },
+    {
+      "export_relative_path": "payload/runtime/scripts/telegram-media-invite.mjs",
+      "original_repository_path": "scripts/telegram-media-invite.mjs",
+      "source_commit": "580007d45bd4e903d829d1f17ed61dd4341e0dcd",
+      "classification": "runtime",
+      "byte_size": 13824,
+      "sha256": "2dcb9b6c8c04e81156fcd566e9990746fe9a77c2351ac2df6b6b0ecbd6265d9f",
+      "intended_final_use": "candidate immutable image runtime source or immutable metadata"
+    },
+    {
+      "export_relative_path": "payload/runtime/scripts/telegram-media-command-registry.mjs",
+      "original_repository_path": "scripts/telegram-media-command-registry.mjs",
+      "source_commit": "580007d45bd4e903d829d1f17ed61dd4341e0dcd",
+      "classification": "runtime",
+      "byte_size": 3002,
+      "sha256": "b45af6ec26b2c47928587aefbf73eb86180cd493cfb56f8f564700e58f59ec45",
+      "intended_final_use": "candidate immutable image runtime source or immutable metadata"
+    },
+    {
+      "export_relative_path": "payload/runtime/scripts/telegram-media-paths.mjs",
+      "original_repository_path": "scripts/telegram-media-paths.mjs",
+      "source_commit": "580007d45bd4e903d829d1f17ed61dd4341e0dcd",
+      "classification": "runtime",
+      "byte_size": 2407,
+      "sha256": "d2d2d15cd407f14e3a93783459d3faff9003360feb4b57158df1a1f4a6fe61d2",
+      "intended_final_use": "candidate immutable image runtime source or immutable metadata"
+    },
+    {
+      "export_relative_path": "payload/runtime/scripts/media-mvp-add-gated.mjs",
+      "original_repository_path": "scripts/media-mvp-add-gated.mjs",
+      "source_commit": "580007d45bd4e903d829d1f17ed61dd4341e0dcd",
+      "classification": "runtime",
+      "byte_size": 9008,
+      "sha256": "1266ed075484704350d1ea29105a93994f14dd55b25a16a08835fe31e1e67da0",
+      "intended_final_use": "candidate immutable image runtime source or immutable metadata"
+    },
+    {
+      "export_relative_path": "payload/runtime/scripts/media-mvp-resolve.mjs",
+      "original_repository_path": "scripts/media-mvp-resolve.mjs",
+      "source_commit": "580007d45bd4e903d829d1f17ed61dd4341e0dcd",
+      "classification": "runtime",
+      "byte_size": 10388,
+      "sha256": "bce480e8c08609fed1e1a10d807912aae23988cee37045920fd3b7546f174e17",
+      "intended_final_use": "candidate immutable image runtime source or immutable metadata"
+    },
+    {
+      "export_relative_path": "payload/runtime/config/telegram-media-commands.json",
+      "original_repository_path": "config/telegram-media-commands.json",
+      "source_commit": "580007d45bd4e903d829d1f17ed61dd4341e0dcd",
+      "classification": "runtime",
+      "byte_size": 777,
+      "sha256": "ead5697a422498513a46bd05275490958b5219023c9d68b66f189cca90639cf5",
+      "intended_final_use": "candidate immutable image runtime source or immutable metadata"
+    },
+    {
+      "export_relative_path": "payload/reference-only/scripts/apply-telegram-media-gate-startup-patch.mjs",
+      "original_repository_path": "scripts/apply-telegram-media-gate-startup-patch.mjs",
+      "source_commit": "6049d34d751333d8d0dd6a77d506c9a42d19d495",
+      "classification": "reference-only",
+      "byte_size": 6947,
+      "sha256": "0c88f9182f61651e2ec8ff776da9d5850dda96b8b00b3a681f4bba17f432ba01",
+      "intended_final_use": "historical reference only; not for direct production use or direct image inclusion unchanged"
+    },
+    {
+      "export_relative_path": "payload/test-only/scripts/telegram-media-paths-tests.mjs",
+      "original_repository_path": "scripts/telegram-media-paths-tests.mjs",
+      "source_commit": "580007d45bd4e903d829d1f17ed61dd4341e0dcd",
+      "classification": "test-only",
+      "byte_size": 3993,
+      "sha256": "40452cdce9093d6dbd08a7d48c306b2d829237c41ffdcfdc24052f381d633868",
+      "intended_final_use": "verification-only test fixture/source; not an image runtime asset"
+    },
+    {
+      "export_relative_path": "payload/test-only/scripts/telegram-media-gate-tests.mjs",
+      "original_repository_path": "scripts/telegram-media-gate-tests.mjs",
+      "source_commit": "580007d45bd4e903d829d1f17ed61dd4341e0dcd",
+      "classification": "test-only",
+      "byte_size": 4231,
+      "sha256": "e26fd40f06d52ef3b4bf75bd8577acfab58f4600f2424d89b7217dbc2a259f8b",
+      "intended_final_use": "verification-only test fixture/source; not an image runtime asset"
+    },
+    {
+      "export_relative_path": "payload/test-only/scripts/telegram-media-pending-tests.mjs",
+      "original_repository_path": "scripts/telegram-media-pending-tests.mjs",
+      "source_commit": "580007d45bd4e903d829d1f17ed61dd4341e0dcd",
+      "classification": "test-only",
+      "byte_size": 5722,
+      "sha256": "b0697ea6ca1afb3313cc52dc3b6721d360e43f1b21ce38731bf0cf4e63bd682f",
+      "intended_final_use": "verification-only test fixture/source; not an image runtime asset"
+    },
+    {
+      "export_relative_path": "payload/test-only/scripts/telegram-media-invite-tests.mjs",
+      "original_repository_path": "scripts/telegram-media-invite-tests.mjs",
+      "source_commit": "580007d45bd4e903d829d1f17ed61dd4341e0dcd",
+      "classification": "test-only",
+      "byte_size": 10207,
+      "sha256": "ce3787807f612ebaef883794c390d46aa5abe7c053f52524f3e8814f781b339e",
+      "intended_final_use": "verification-only test fixture/source; not an image runtime asset"
+    }
+  ],
+  "explicit_exclusions": [
+    ".env",
+    "access configuration contents",
+    "media backend configuration contents",
+    "runtime state",
+    "logs",
+    "Telegram IDs",
+    "invite tokens or hashes",
+    "credentials",
+    "/app/dist"
+  ],
+  "unresolved_deployment_requirements": [
+    "verified upstream OpenClaw 2026.5.4 manifest digest",
+    "exact target bundle filename/path",
+    "exact original bundle SHA-256",
+    "exact patched bundle SHA-256",
+    "exact structural anchors and occurrence counts"
+  ]
+}

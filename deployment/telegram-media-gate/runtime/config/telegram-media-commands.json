@@ -1,0 +1,31 @@
+{
+  "telegram": {
+    "primaryInterface": true,
+    "helpIntro": "Media commands:",
+    "stubIntro": "Media-only access:",
+    "commands": [
+      {
+        "command": "/movie",
+        "kind": "movie",
+        "usage": "/movie <title>",
+        "description": "Add a movie through Radarr.",
+        "requestSuffix": "movie",
+        "targetService": "Radarr"
+      },
+      {
+        "command": "/show",
+        "kind": "show",
+        "usage": "/show <title>",
+        "description": "Add a show through Sonarr.",
+        "requestSuffix": "show",
+        "targetService": "Sonarr"
+      },
+      {
+        "command": "/mediahelp",
+        "kind": "help",
+        "usage": "/mediahelp",
+        "description": "List the available Telegram media commands."
+      }
+    ]
+  }
+}

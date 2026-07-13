@@ -1,0 +1,92 @@
+{
+  "schema_version": "1.0.0",
+  "collection_timestamp": "2026-07-13T04:55:21Z",
+  "collection": {
+    "archive_name": "telegram-media-gate-20260713T045521Z.tar.gz",
+    "archive_sha256": "605c9098d8fbbe0750800244fe7aa778aa8ca79f6ed4a6a111b0a1726c91763a",
+    "evidence_file_hashes_verified": 5085,
+    "source": "disposable stopped container created from the known-good local image",
+    "live_container_inspected": false,
+    "production_filesystem_inspected": false
+  },
+  "image": {
+    "local_image_id": "sha256:142bc42a1333464142bb252e177bd5702f042f89645b7b22988c7f9d3e017bb2",
+    "local_image_id_role": "rollback evidence only; not an upstream registry digest",
+    "openclaw_version": "2026.5.4",
+    "architecture": "amd64",
+    "os": "linux",
+    "working_directory": "/app",
+    "configured_user": "node",
+    "entrypoint": [
+      "docker-entrypoint.sh"
+    ],
+    "command": [
+      "node",
+      "openclaw.mjs",
+      "gateway",
+      "--allow-unconfigured"
+    ]
+  },
+  "version_probe": {
+    "probe_file": "/app/package.json",
+    "evidence_source": "image-copy/package.json",
+    "evidence_sha256": "ebfe4600fb2e0f50f28824cf39ea97e47a361f03059b662af704ee61ed6a1206",
+    "checks": [
+      {
+        "field_path": [
+          "name"
+        ],
+        "expected": "openclaw"
+      },
+      {
+        "field_path": [
+          "version"
+        ],
+        "expected": "2026.5.4"
+      }
+    ],
+    "rationale": "The immutable image filesystem exposes package.json at startup; exact name and version checks do not depend on Docker labels."
+  },
+  "bundle": {
+    "evidence_path": "image-copy/dist/bot-D-7bCSXH.js",
+    "image_relative_path": "dist/bot-D-7bCSXH.js",
+    "dist_relative_path": "bot-D-7bCSXH.js",
+    "size_bytes": 244956,
+    "original_sha256": "31f372aa5527d3db4769f3ac0c53547b395fb37defd70e62b5655a823f0e861b",
+    "patched_sha256": "4b37c23bc7e335d4768f4d22f83ccacf7a204773e759522d25065d3b39d436a5",
+    "candidate_selector_counts": {
+      "const handleInboundMessageLike = async (event) => {": 1,
+      "await processInboundMessage({": 1,
+      "bot.on(\"message\", async (ctx) => {": 1,
+      "createTelegramBot": 4
+    },
+    "structural_anchors": [
+      {
+        "name": "telegram_dedupe_helper",
+        "expected_count": 1
+      },
+      {
+        "name": "inbound_message_handoff",
+        "expected_count": 1
+      }
+    ]
+  },
+  "derivation": {
+    "tool": "tools/derive_evidence.py",
+    "transform": "tools/integrity.py:render_patched_bytes",
+    "immutable_import_url": "file:///opt/openclaw-telegram-media-gate/scripts/telegram-media-gate.mjs",
+    "controlled_dist_file_count_before": 5077,
+    "controlled_dist_file_count_after": 5077,
+    "changed_files": [
+      "dist/bot-D-7bCSXH.js"
+    ],
+    "idempotent_second_pass": true,
+    "startup_verifier_accepts_patched": true,
+    "startup_verifier_rejects_original": true
+  },
+  "upstream_base_image": {
+    "reference": null,
+    "verified_manifest_digest": null,
+    "status": "intentionally unresolved pending independent registry evidence"
+  }
+}

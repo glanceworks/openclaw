@@ -1,0 +1,53 @@
+ARG OPENCLAW_BASE_IMAGE
+# OPENCLAW_BASE_IMAGE intentionally has no default. The manifest is the source of
+# the exact reviewed linux/amd64 tag-and-platform-digest reference.
+FROM ${OPENCLAW_BASE_IMAGE}
+ARG OPENCLAW_BASE_IMAGE
+
+USER root
+
+RUN apt-get update && apt-get install -y --no-install-recommends \
+  libglib2.0-0 \
+  libnspr4 \
+  libnss3 \
+  libatk1.0-0 \
+  libatk-bridge2.0-0 \
+  libdbus-1-3 \
+  libx11-6 \
+  libxcomposite1 \
+  libxdamage1 \
+  libxext6 \
+  libxfixes3 \
+  libxrandr2 \
+  libgbm1 \
+  libxcb1 \
+  libxkbcommon0 \
+  libasound2 \
+  libatspi2.0-0 \
+  python3-minimal \
+  && rm -rf /var/lib/apt/lists/*
+
+COPY deployment/telegram-media-gate/runtime/ /opt/openclaw-telegram-media-gate/
+COPY deployment/telegram-media-gate/deployment-manifest.json \
+  deployment/telegram-media-gate/entrypoint.sh \
+  /opt/openclaw-telegram-media-gate/deployment/
+COPY deployment/telegram-media-gate/tools/ \
+  /opt/openclaw-telegram-media-gate/deployment/tools/
+
+RUN python3 /opt/openclaw-telegram-media-gate/deployment/tools/validate_base_image.py \
+      --manifest /opt/openclaw-telegram-media-gate/deployment/deployment-manifest.json \
+      --supplied-reference "${OPENCLAW_BASE_IMAGE}" \
+  && python3 /opt/openclaw-telegram-media-gate/deployment/tools/validate_readiness.py \
+      --manifest /opt/openclaw-telegram-media-gate/deployment/deployment-manifest.json \
+      --runtime-root /opt/openclaw-telegram-media-gate \
+  && python3 /opt/openclaw-telegram-media-gate/deployment/tools/patch_bundle.py \
+      --manifest /opt/openclaw-telegram-media-gate/deployment/deployment-manifest.json \
+      --app-root /app \
+      --dist-root /app/dist \
+  && find /opt/openclaw-telegram-media-gate -type d -exec chmod 0555 {} + \
+  && find /opt/openclaw-telegram-media-gate -type f -exec chmod 0444 {} + \
+  && chmod 0555 /opt/openclaw-telegram-media-gate/deployment/entrypoint.sh
+
+USER node
+
+ENTRYPOINT ["/opt/openclaw-telegram-media-gate/deployment/entrypoint.sh"]
