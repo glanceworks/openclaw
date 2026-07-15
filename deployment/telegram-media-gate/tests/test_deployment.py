@@ -287,6 +287,17 @@ class DeploymentFrameworkTests(unittest.TestCase):
             "function safeFailureForLog(result)",
         ):
             self.assertIn(snippet, handler)
+        self.assertIn(
+            "status: Number.isFinite(Number(failure.status)) ? "
+            "Number(failure.status) : null",
+            handler,
+        )
+        self.assertIn(
+            "status: Number.isFinite(Number(fetchResult.status)) ? "
+            "Number(fetchResult.status) : null",
+            resolver,
+        )
+        self.assertIn("status: null", resolver)
         self.assertIn("failure: safeFailureMeta('lookup', lookup)", resolver)
         self.assertIn("failure: safeFailureMeta('library', library)", resolver)
         self.assertIn("text: ''", resolver)
@@ -368,9 +379,11 @@ class DeploymentFrameworkTests(unittest.TestCase):
             "url": "fixture-url", "apiKey": "fixture-key", "responseBody": "fixture-body",
             "telegramId": "fixture-id", "secret": "fixture-secret",
         }
+        # Mirrors the committed JS projection: raw null becomes the numeric
+        # no-response sentinel 0 through Number(null).
         for phase, category, status, error_class in (
             ("lookup", "HTTP 5xx", 503, "Response"),
-            ("library", "timeout", None, "TimeoutError"),
+            ("library", "timeout", 0, "TimeoutError"),
         ):
             raw = {"phase": phase, "category": category, "status": status,
                    "errorClass": error_class, **sensitive}
@@ -405,6 +418,16 @@ class DeploymentFrameworkTests(unittest.TestCase):
             "await mediaAccess('2026')",
             "lookup_error",
             "library_error",
+            "/show broken status 401",
+            "/show broken status 404",
+            "/show broken status 500",
+            "/show broken status numeric string",
+            "/show broken status nan",
+            "/show broken status infinity",
+            "/show broken status secret",
+            "Number.NaN",
+            "Number.POSITIVE_INFINITY",
+            "0 means no HTTP status was received",
             "sensitive-api-key-value",
             "sensitive-url-value",
             "sensitive-response-body-value",
@@ -458,6 +481,15 @@ class DeploymentFrameworkTests(unittest.TestCase):
         )
         for assertion in (
             "assert.deepEqual(Object.keys(log.failure).sort(), APPROVED_FAILURE_KEYS)",
+            "{ phase: 'library', category: 'timeout', status: 0, errorClass: 'TimeoutError' }",
+            "['/show broken status 401', 'HTTP 401/403', 401]",
+            "['/show broken status 404', 'HTTP 404', 404]",
+            "['/show broken status 500', 'HTTP 5xx', 500]",
+            "assert.equal(typeof httpLog.failure.status, 'number')",
+            "assert.ok(Number.isFinite(httpLog.failure.status))",
+            "assert.equal(typeof numericStringLog.failure.status, 'number')",
+            "assert.equal(invalidStatusLog.failure.status, null)",
+            "assert.equal(timeoutLog.failure.status, 0)",
             "assertNoSensitiveSurface(log.failure, 'failure metadata')",
             "assertNoSensitiveSurface(result.responseText, 'user-facing reply')",
             "assertNoSensitiveSurface(log, 'audit log')",

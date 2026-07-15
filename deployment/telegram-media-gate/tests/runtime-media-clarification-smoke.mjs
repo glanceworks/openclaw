@@ -49,6 +49,19 @@ function lowConfidence(title = 'Dragons: Race to the Edge') {
   };
 }
 
+function lookupFailure(status, category) {
+  return {
+    resolverState: 'lookup_error',
+    addResult: 'not_attempted',
+    matchedTitle: null,
+    candidates: [],
+    failure: {
+      phase: 'lookup', category, status, errorClass: 'Response',
+      ...sensitiveFailureFields
+    }
+  };
+}
+
 const runner = async (input) => {
   runnerInputs.push(input);
   const query = String(input || '').trim().toLowerCase();
@@ -66,13 +79,14 @@ const runner = async (input) => {
   if (query === 'dragons: race to the edge show') return lowConfidence();
   if (query === 'dragons: race to the edge 2015 show') return lowConfidence();
   if (query === 'race to the edge 2015 show') return lowConfidence('Race to the Edge');
-  if (query === 'broken lookup show') return {
-    resolverState: 'lookup_error', addResult: 'not_attempted', matchedTitle: null,
-    candidates: [], failure: {
-      phase: 'lookup', category: 'HTTP 5xx', status: 503, errorClass: 'Response',
-      ...sensitiveFailureFields
-    }
-  };
+  if (query === 'broken lookup show') return lookupFailure(503, 'HTTP 5xx');
+  if (query === 'broken status 401 show') return lookupFailure(401, 'HTTP 401/403');
+  if (query === 'broken status 404 show') return lookupFailure(404, 'HTTP 404');
+  if (query === 'broken status 500 show') return lookupFailure(500, 'HTTP 5xx');
+  if (query === 'broken status numeric string show') return lookupFailure('401', 'HTTP 401/403');
+  if (query === 'broken status nan show') return lookupFailure(Number.NaN, 'other');
+  if (query === 'broken status infinity show') return lookupFailure(Number.POSITIVE_INFINITY, 'other');
+  if (query === 'broken status secret show') return lookupFailure(sensitiveFailureFields.token, 'other');
   if (query === 'broken library movie') return {
     resolverState: 'library_error', addResult: 'not_attempted', matchedTitle: null,
     candidates: [], failure: {
@@ -225,12 +239,50 @@ try {
   assertSanitized(result, readLogs().at(-1),
     { phase: 'lookup', category: 'HTTP 5xx', status: 503, errorClass: 'Response' }, accessConfig, requestEnvelope);
 
+  for (const [command, category, status] of [
+    ['/show broken status 401', 'HTTP 401/403', 401],
+    ['/show broken status 404', 'HTTP 404', 404],
+    ['/show broken status 500', 'HTTP 5xx', 500]
+  ]) {
+    resetMutableData();
+    result = await mediaAccess(command);
+    const httpLog = readLogs().at(-1);
+    assertSanitized(result, httpLog,
+      { phase: 'lookup', category, status, errorClass: 'Response' }, accessConfig, requestEnvelope);
+    assert.equal(typeof httpLog.failure.status, 'number');
+    assert.ok(Number.isFinite(httpLog.failure.status));
+  }
+
+  resetMutableData();
+  result = await mediaAccess('/show broken status numeric string');
+  const numericStringLog = readLogs().at(-1);
+  assertSanitized(result, numericStringLog,
+    { phase: 'lookup', category: 'HTTP 401/403', status: 401, errorClass: 'Response' }, accessConfig, requestEnvelope);
+  assert.equal(typeof numericStringLog.failure.status, 'number');
+
+  for (const command of [
+    '/show broken status nan',
+    '/show broken status infinity',
+    '/show broken status secret'
+  ]) {
+    resetMutableData();
+    result = await mediaAccess(command);
+    const invalidStatusLog = readLogs().at(-1);
+    assertSanitized(result, invalidStatusLog,
+      { phase: 'lookup', category: 'other', status: null, errorClass: 'Response' }, accessConfig, requestEnvelope);
+    assert.equal(invalidStatusLog.failure.status, null);
+  }
+
   resetMutableData();
   result = await mediaAccess('/movie broken library');
   assert.equal(result.responseText,
     "Radarr answered the lookup, but I couldn't check the library right now. Try again later.");
-  assertSanitized(result, readLogs().at(-1),
-    { phase: 'library', category: 'timeout', status: null, errorClass: 'TimeoutError' }, accessConfig, requestEnvelope);
+  const timeoutLog = readLogs().at(-1);
+  // Established runtime contract: Number(null) is 0; 0 means no HTTP status was received.
+  assertSanitized(result, timeoutLog,
+    { phase: 'library', category: 'timeout', status: 0, errorClass: 'TimeoutError' }, accessConfig, requestEnvelope);
+  assert.equal(typeof timeoutLog.failure.status, 'number');
+  assert.equal(timeoutLog.failure.status, 0);
 } finally {
   if (previousDataRoot === undefined) delete process.env.OPENCLAW_TELEGRAM_MEDIA_DATA_ROOT;
   else process.env.OPENCLAW_TELEGRAM_MEDIA_DATA_ROOT = previousDataRoot;
