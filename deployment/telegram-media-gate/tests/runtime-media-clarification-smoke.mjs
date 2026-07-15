@@ -20,14 +20,25 @@ globalThis.fetch = async () => { throw new Error('network access is forbidden in
 const FULL_ACCESS_USER_ID = '900000000000001';
 const MEDIA_ONLY_USER_ID = '900000000000002';
 const UNKNOWN_USER_ID = '900000000000003';
+const SYNTHETIC_CHAT_ID = '-900000000000004';
+const APPROVED_FAILURE_KEYS = ['category', 'errorClass', 'phase', 'status'];
+const FORBIDDEN_FAILURE_KEYS = ['apiKey', 'url', 'responseBody', 'token', 'userId', 'senderId', 'chatId', 'message', 'stack'];
 const runnerInputs = [];
 const sensitiveFailureFields = {
   apiKey: 'sensitive-api-key-value',
   url: 'sensitive-url-value',
   responseBody: 'sensitive-response-body-value',
   token: 'sensitive-token-value',
-  userId: MEDIA_ONLY_USER_ID
+  userId: MEDIA_ONLY_USER_ID,
+  message: 'sensitive-exception-message-value',
+  stack: 'sensitive-stack-value'
 };
+const SENSITIVE_SURFACE_VALUES = [...new Set([
+  ...Object.values(sensitiveFailureFields),
+  FULL_ACCESS_USER_ID,
+  MEDIA_ONLY_USER_ID,
+  UNKNOWN_USER_ID
+])];
 
 function lowConfidence(title = 'Dragons: Race to the Edge') {
   return {
@@ -89,22 +100,67 @@ function assertCanonical(expected) {
   assert.deepEqual(canonical, expected);
   assert.notEqual(canonical.title, '2015 2015');
 }
-function assertSanitized(result, log, expectedFailure) {
-  assert.deepEqual(log.failure, expectedFailure);
-  assert.deepEqual(Object.keys(log.failure).sort(), ['category', 'errorClass', 'phase', 'status']);
-  const serialized = JSON.stringify({ result, log });
-  for (const value of Object.values(sensitiveFailureFields)) {
-    assert.ok(!serialized.includes(value), `sensitive value leaked: ${value}`);
+function assertNoSensitiveSurface(value, label) {
+  const serialized = JSON.stringify(value);
+  for (const sensitiveValue of SENSITIVE_SURFACE_VALUES) {
+    assert.ok(!serialized.includes(sensitiveValue), `${label} leaked sensitive value: ${sensitiveValue}`);
   }
+}
+function exactValuePaths(value, target, currentPath = '') {
+  if (value === target) return [currentPath];
+  if (Array.isArray(value)) {
+    return value.flatMap((entry, index) => exactValuePaths(entry, target, `${currentPath}[${index}]`));
+  }
+  if (value && typeof value === 'object') {
+    return Object.entries(value).flatMap(([key, entry]) =>
+      exactValuePaths(entry, target, currentPath ? `${currentPath}.${key}` : key));
+  }
+  return [];
+}
+function assertSenderIdBoundaries(accessConfig, requestEnvelope, state, outwardSurfaces) {
+  assert.deepEqual(accessConfig.telegram.mediaRequestUserIds, [MEDIA_ONLY_USER_ID]);
+  assert.equal(requestEnvelope.senderId, MEDIA_ONLY_USER_ID);
+  assert.notEqual(requestEnvelope.chatId, MEDIA_ONLY_USER_ID);
+  assert.deepEqual(
+    exactValuePaths({ accessConfig, requestEnvelope, state, outwardSurfaces }, MEDIA_ONLY_USER_ID).sort(),
+    [
+      'accessConfig.telegram.mediaRequestUserIds[0]',
+      'requestEnvelope.senderId',
+      'state.recentRequests[0].userId',
+      'state.requestHistory[0].userId'
+    ]
+  );
+  assertNoSensitiveSurface(outwardSurfaces, 'outward surface');
+}
+function assertSanitized(result, log, expectedFailure, accessConfig, requestEnvelope) {
+  assert.deepEqual(log.failure, expectedFailure);
+  assert.deepEqual(Object.keys(log.failure).sort(), APPROVED_FAILURE_KEYS);
+  for (const key of FORBIDDEN_FAILURE_KEYS) {
+    assert.ok(!Object.hasOwn(log.failure, key), `failure metadata exposed prohibited key: ${key}`);
+  }
+  assert.equal(log.responseText, result.responseText);
+  assert.equal(log.userId, `...${MEDIA_ONLY_USER_ID.slice(-4)}`);
+  assert.notEqual(log.userId, MEDIA_ONLY_USER_ID);
+  assert.equal(log.chatId, SYNTHETIC_CHAT_ID);
+  assert.notEqual(log.chatId, MEDIA_ONLY_USER_ID);
+  assertNoSensitiveSurface(log.failure, 'failure metadata');
+  assertNoSensitiveSurface(result.responseText, 'user-facing reply');
+  assertNoSensitiveSurface(log, 'audit log');
+  assertSenderIdBoundaries(accessConfig, requestEnvelope, readState(), {
+    responseText: result.responseText,
+    failure: log.failure,
+    audit: log
+  });
 }
 
 try {
   fs.mkdirSync(path.dirname(configPath), { recursive: true });
-  fs.writeFileSync(configPath, JSON.stringify({ telegram: {
+  const accessConfig = { telegram: {
     fullAccessUserIds: [FULL_ACCESS_USER_ID],
     mediaRequestUserIds: [MEDIA_ONLY_USER_ID],
     unknownUserAction: 'ignore'
-  }}, null, 2) + '\n');
+  }};
+  fs.writeFileSync(configPath, JSON.stringify(accessConfig, null, 2) + '\n');
 
   const gateUrl = pathToFileURL(path.join(runtimeRoot, 'telegram-media-gate.mjs')).href;
   const handlerUrl = pathToFileURL(path.join(runtimeRoot, 'telegram-media-handler.mjs')).href;
@@ -112,9 +168,13 @@ try {
   const { handleTelegramMediaCommand } = await import(handlerUrl);
   const mediaHandler = (text, options = {}) =>
     handleTelegramMediaCommand(text, { ...options, runner });
-  const mediaAccess = (text, senderId = MEDIA_ONLY_USER_ID) => evaluateTelegramMediaAccess({
-    provider: 'telegram', senderId, chatId: senderId, text, mediaHandler
-  });
+  let requestEnvelope = null;
+  const mediaAccess = (text, senderId = MEDIA_ONLY_USER_ID) => {
+    requestEnvelope = {
+      provider: 'telegram', senderId, chatId: SYNTHETIC_CHAT_ID, text
+    };
+    return evaluateTelegramMediaAccess({ ...requestEnvelope, mediaHandler });
+  };
 
   resetMutableData();
   const unknownResult = await mediaAccess('/show Dragons: Race to the Edge (2015)', UNKNOWN_USER_ID);
@@ -163,14 +223,14 @@ try {
   result = await mediaAccess('/show broken lookup');
   assert.equal(result.responseText, 'Sonarr lookup is having trouble right now. Try again later.');
   assertSanitized(result, readLogs().at(-1),
-    { phase: 'lookup', category: 'HTTP 5xx', status: 503, errorClass: 'Response' });
+    { phase: 'lookup', category: 'HTTP 5xx', status: 503, errorClass: 'Response' }, accessConfig, requestEnvelope);
 
   resetMutableData();
   result = await mediaAccess('/movie broken library');
   assert.equal(result.responseText,
     "Radarr answered the lookup, but I couldn't check the library right now. Try again later.");
   assertSanitized(result, readLogs().at(-1),
-    { phase: 'library', category: 'timeout', status: null, errorClass: 'TimeoutError' });
+    { phase: 'library', category: 'timeout', status: null, errorClass: 'TimeoutError' }, accessConfig, requestEnvelope);
 } finally {
   if (previousDataRoot === undefined) delete process.env.OPENCLAW_TELEGRAM_MEDIA_DATA_ROOT;
   else process.env.OPENCLAW_TELEGRAM_MEDIA_DATA_ROOT = previousDataRoot;

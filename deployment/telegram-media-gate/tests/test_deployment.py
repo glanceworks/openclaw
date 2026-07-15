@@ -409,12 +409,21 @@ class DeploymentFrameworkTests(unittest.TestCase):
             "sensitive-url-value",
             "sensitive-response-body-value",
             "sensitive-token-value",
+            "sensitive-exception-message-value",
+            "sensitive-stack-value",
             "FULL_ACCESS_USER_ID",
             "MEDIA_ONLY_USER_ID",
             "UNKNOWN_USER_ID",
+            "SYNTHETIC_CHAT_ID",
             "mediaRequestUserIds: [MEDIA_ONLY_USER_ID]",
             "unknownResult.decision, 'ignore'",
             "result.reason, 'media_request_user'",
+            "assertSenderIdBoundaries",
+            "assertNoSensitiveSurface",
+            "exactValuePaths",
+            "SENSITIVE_SURFACE_VALUES",
+            "APPROVED_FAILURE_KEYS",
+            "FORBIDDEN_FAILURE_KEYS",
             "runtime media clarification smoke passed",
         ):
             self.assertIn(scenario, source)
@@ -434,13 +443,39 @@ class DeploymentFrameworkTests(unittest.TestCase):
                 "UNKNOWN_USER_ID": "900000000000003",
             },
         )
+        self.assertIn("const SYNTHETIC_CHAT_ID = '-900000000000004';", source)
         self.assertLess(
             source.index("process.env.OPENCLAW_TELEGRAM_MEDIA_DATA_ROOT = dataRoot"),
             source.index("await import("),
         )
-        self.assertIn("provider: 'telegram', senderId, chatId: senderId", source)
+        self.assertIn("provider: 'telegram', senderId, chatId: SYNTHETIC_CHAT_ID, text", source)
         self.assertIn("assert.equal(unknownResult.decision, 'ignore')", source)
         self.assertIn("assert.equal(result.decision, 'intercept_media_only')", source)
+        self.assertIn(
+            "const APPROVED_FAILURE_KEYS = "
+            "['category', 'errorClass', 'phase', 'status'];",
+            source,
+        )
+        for assertion in (
+            "assert.deepEqual(Object.keys(log.failure).sort(), APPROVED_FAILURE_KEYS)",
+            "assertNoSensitiveSurface(log.failure, 'failure metadata')",
+            "assertNoSensitiveSurface(result.responseText, 'user-facing reply')",
+            "assertNoSensitiveSurface(log, 'audit log')",
+            "assert.equal(log.userId, `...${MEDIA_ONLY_USER_ID.slice(-4)}`)",
+            "assert.notEqual(log.userId, MEDIA_ONLY_USER_ID)",
+            "assert.equal(log.chatId, SYNTHETIC_CHAT_ID)",
+            "assert.notEqual(log.chatId, MEDIA_ONLY_USER_ID)",
+            "assert.equal(requestEnvelope.senderId, MEDIA_ONLY_USER_ID)",
+            "assert.notEqual(requestEnvelope.chatId, MEDIA_ONLY_USER_ID)",
+            "exactValuePaths({ accessConfig, requestEnvelope, state, outwardSurfaces }, MEDIA_ONLY_USER_ID)",
+            "'accessConfig.telegram.mediaRequestUserIds[0]'",
+            "'requestEnvelope.senderId'",
+            "'state.recentRequests[0].userId'",
+            "'state.requestHistory[0].userId'",
+            "userId: MEDIA_ONLY_USER_ID",
+        ):
+            self.assertIn(assertion, source)
+        self.assertNotIn("JSON.stringify({ result, log })", source)
         self.assertIn("fs.rmSync(dataRoot, { recursive: true, force: true })", source)
         self.assertIn("globalThis.fetch = async () =>", source)
         for forbidden in (
