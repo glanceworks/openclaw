@@ -1,0 +1,56 @@
+{
+  "schema_version": "1.0.0",
+  "source_commit": "2168d504507edf6117a13f9b9aeef2ac88808bb2",
+  "parent_commit": "580007d45bd4e903d829d1f17ed61dd4341e0dcd",
+  "archive_sha256": "659a3b69e5b4bd05f5d8483d0789a8172bda7d162259eb982b6fb0daabcb292b",
+  "reason_for_refresh": [
+    "canonical pending {title, year, mediaType}",
+    "bare-year merge is idempotent",
+    "stable low-confidence query",
+    "sanitized lookup/library error metadata"
+  ],
+  "exact_historical_lookup_error_reproduced": false,
+  "files": [
+    {
+      "source_path": "scripts/media-mvp-add-gated.mjs",
+      "deployment_path": "runtime/scripts/media-mvp-add-gated.mjs",
+      "old_sha256": "1266ed075484704350d1ea29105a93994f14dd55b25a16a08835fe31e1e67da0",
+      "new_sha256": "2dce4401dea21096a4f6b48fe593e314fb091e1e4a0bb6296b340749bb509c91",
+      "byte_size": 9047,
+      "git_mode": "100644"
+    },
+    {
+      "source_path": "scripts/media-mvp-resolve.mjs",
+      "deployment_path": "runtime/scripts/media-mvp-resolve.mjs",
+      "old_sha256": "bce480e8c08609fed1e1a10d807912aae23988cee37045920fd3b7546f174e17",
+      "new_sha256": "67006583e15062fa89d01e7b68ebbe9f02b2e5ac077b022ba2406d0fcb4d62aa",
+      "byte_size": 12105,
+      "git_mode": "100644"
+    },
+    {
+      "source_path": "scripts/telegram-media-handler.mjs",
+      "deployment_path": "runtime/scripts/telegram-media-handler.mjs",
+      "old_sha256": "7c17d1d81fe0df9b96963fd6b7afc7f7a8dbe48dd040b5a1a3fcff0c935c241e",
+      "new_sha256": "31bf92d01ff9c9ec9e3be18c7daff70fc40e627086e5a256015e7154a3c134ad",
+      "byte_size": 15022,
+      "git_mode": "100644"
+    }
+  ],
+  "test_only_provenance": {
+    "source_path": "scripts/telegram-media-pending-tests.mjs",
+    "payload_path": "payload/test-only/scripts/telegram-media-pending-tests.mjs",
+    "sha256": "8420a9b5d00abb7e5011fa5fb990225a8e3501e4c621eeaad46281338e2339c1",
+    "byte_size": 9426,
+    "git_mode": "100644",
+    "copied_into_image_runtime": false,
+    "use": "scenario provenance only; deployment tests are adapted to the immutable deployment layout"
+  },
+  "preserved_evidence": {
+    "base_image_pin": true,
+    "generated_bundle_path_and_hashes": true,
+    "entrypoint_and_command_contract": true,
+    "runtime_uid_gid_assumptions": true,
+    "five_unchanged_runtime_module_hashes": true,
+    "command_registry_json_hash": true
+  }
+}

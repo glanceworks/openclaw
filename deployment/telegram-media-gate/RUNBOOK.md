@@ -73,6 +73,24 @@ Only after separate authorization:
 7. Confirm the guarded wrapper only verifies and then delegates with
    `exec docker-entrypoint.sh "$@"`.
 8. Confirm bind-mounted state remains writable by numeric UID/GID `1001:1001`.
+9. This isolated source host has no Node runtime, so it cannot execute the image
+   smoke test. After a candidate exists and test execution is separately
+   authorized, use the following network-disabled, read-only pattern:
+
+   ```bash
+   docker run \
+     --rm \
+     --network none \
+     --read-only \
+     --tmpfs /tmp:rw,nosuid,nodev,size=16m \
+     -e OPENCLAW_TELEGRAM_MEDIA_RUNTIME_ROOT=/opt/openclaw-telegram-media-gate/scripts \
+     --entrypoint node \
+     <candidate-tag> \
+     /opt/openclaw-telegram-media-gate/deployment/tests/runtime-media-clarification-smoke.mjs
+   ```
+
+   This command is documentation only and does not authorize a build, container
+   run, restart, or deployment.
 
 ## 6. Future gateway-only activation and validation
 

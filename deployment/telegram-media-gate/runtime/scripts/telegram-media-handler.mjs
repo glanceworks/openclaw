@@ -105,10 +105,70 @@ function candidateOptionsText(candidates) {
   return unique;
 }
 
+function parseTitleYear(text) {
+  const raw = String(text || '').trim().replace(/\s+/g, ' ');
+  const parenMatch = raw.match(/^(.*?)\s*\((19\d{2}|20\d{2}|21\d{2})\)\s*$/);
+  const trailingMatch = raw.match(/^(.*?)\s+(19\d{2}|20\d{2}|21\d{2})\s*$/);
+  const match = parenMatch || trailingMatch;
+  if (match) {
+    return { title: match[1].trim(), year: Number(match[2]) };
+  }
+  return { title: raw, year: null };
+}
+
+function canonicalFromQuery(query, mediaType) {
+  const parsed = parseTitleYear(query);
+  return {
+    title: parsed.title || String(query || '').trim(),
+    year: parsed.year,
+    mediaType: mediaType === 'show' ? 'show' : 'movie'
+  };
+}
+
+function mergeClarificationIntoCanonical(pending, clarification) {
+  const current = pending?.canonical && typeof pending.canonical === 'object'
+    ? {
+        title: String(pending.canonical.title || pending.originalQuery || '').trim(),
+        year: pending.canonical.year ? Number(pending.canonical.year) : null,
+        mediaType: pending.canonical.mediaType === 'show' ? 'show' : 'movie'
+      }
+    : canonicalFromQuery(pending?.originalQuery || '', pending?.mediaType || 'movie');
+  const text = String(clarification || '').trim().replace(/\s+/g, ' ');
+  const bareYear = text.match(/^(19\d{2}|20\d{2}|21\d{2})$/);
+  if (bareYear) {
+    return { ...current, year: Number(bareYear[1]) };
+  }
+  const parsed = parseTitleYear(text);
+  return {
+    ...current,
+    title: parsed.title || current.title,
+    year: parsed.year || current.year || null
+  };
+}
+
+function canonicalQueryText(canonical, includeMediaType = false) {
+  const title = String(canonical?.title || '').trim().replace(/\s+/g, ' ');
+  const year = canonical?.year ? ` ${Number(canonical.year)}` : '';
+  const mediaType = includeMediaType ? ` ${canonical?.mediaType === 'show' ? 'show' : 'movie'}` : '';
+  return `${title}${year}${mediaType}`.trim();
+}
+
+function safeFailureForLog(result) {
+  const failure = result?.failure;
+  if (!failure || typeof failure !== 'object') return null;
+  return {
+    phase: failure.phase === 'library' ? 'library' : failure.phase === 'lookup' ? 'lookup' : 'unknown',
+    category: String(failure.category || 'other').slice(0, 40),
+    status: Number.isFinite(Number(failure.status)) ? Number(failure.status) : null,
+    errorClass: failure.errorClass ? String(failure.errorClass).slice(0, 40) : null
+  };
+}
+
 function clarificationPrompt(result, pending = null) {
   const options = candidateOptionsText(result.candidates || pending?.candidates || []);
-  const base = pending?.originalQuery
-    ? `I found multiple likely matches for ${pending.originalQuery}.`
+  const query = pending?.canonical ? canonicalQueryText(pending.canonical) : pending?.originalQuery;
+  const base = query
+    ? `I found multiple likely matches for ${query}.`
     : 'I found multiple likely matches.';
   if (options.length > 0) {
     return `${base} Reply with the year or a more specific title: ${options.join('; ')}.`;
@@ -130,8 +190,11 @@ function mapResultToTemplate(result, noun, pending = null) {
   if (result.resolverState === 'no_result') {
     return `I couldn't find a match for that title.`;
   }
-  if (result.resolverState === 'lookup_error' || result.resolverState === 'library_error') {
-    return `${noun} is unavailable right now. Try again later.`;
+  if (result.resolverState === 'lookup_error') {
+    return `${noun} lookup is having trouble right now. Try again later.`;
+  }
+  if (result.resolverState === 'library_error') {
+    return `${noun} answered the lookup, but I couldn't check the library right now. Try again later.`;
   }
   if (result.addResult === 'failed') {
     return `${noun} couldn't add that title right now.`;
@@ -152,6 +215,7 @@ function buildPendingRecord({ userId, chatId, now, entry, originalQuery, request
     originalQuery,
     requestText,
     expectedClarificationType: /^\d{4}$/.test(clarificationText.trim()) ? 'selection' : 'year/title',
+    canonical: canonicalFromQuery(originalQuery, entry.requestSuffix === 'show' ? 'show' : 'movie'),
     candidates: candidateOptionsText(result.candidates || []).map((label) => {
       const match = label.match(/^(.*?)(?: \((\d{4})\))?(?: (movie|show))?$/);
       return {
@@ -169,13 +233,15 @@ async function executeMediaRequest({ runner, requestText, noun }) {
     return {
       ok: true,
       result,
-      responseText: mapResultToTemplate(result, noun)
+      responseText: mapResultToTemplate(result, noun),
+      failure: safeFailureForLog(result)
     };
-  } catch {
+  } catch (err) {
     return {
       ok: false,
       result: null,
-      responseText: `${noun} is unavailable right now. Try again later.`
+      responseText: `${noun} couldn't process that request right now. Try again later.`,
+      failure: { phase: 'runner', category: 'exception', status: null, errorClass: err?.name || err?.constructor?.name || 'Error' }
     };
   }
 }
@@ -198,7 +264,8 @@ async function handleTelegramMediaCommand(text, options = {}) {
       command: command || null,
       arg: arg || null,
       outcome: response.auditOutcome,
-      responseText: response.responseText
+      responseText: response.responseText,
+      failure: response.failure || null
     });
     return { kind: 'handled', responseText: response.responseText };
   };
@@ -214,11 +281,12 @@ async function handleTelegramMediaCommand(text, options = {}) {
     }
 
     const noun = pending.mediaType === 'show' ? 'Sonarr' : 'Radarr';
-    const requestText = `${pending.originalQuery} ${clarification} ${pending.mediaType}`.replace(/\s+/g, ' ').trim();
+    const canonical = mergeClarificationIntoCanonical(pending, clarification);
+    const requestText = canonicalQueryText(canonical, true);
     const executed = await executeMediaRequest({ runner, requestText, noun });
     if (!executed.ok) {
       clearPendingFor(state, userId, chatId);
-      return finalize({ auditOutcome: 'backend_unavailable', responseText: executed.responseText });
+      return finalize({ auditOutcome: 'backend_unavailable', responseText: executed.responseText, failure: executed.failure });
     }
 
     const result = executed.result;
@@ -228,7 +296,7 @@ async function handleTelegramMediaCommand(text, options = {}) {
         chatId,
         now,
         entry: { requestSuffix: pending.mediaType, targetService: noun },
-        originalQuery: `${pending.originalQuery} ${clarification}`.replace(/\s+/g, ' ').trim(),
+        originalQuery: canonicalQueryText(canonical),
         requestText,
         result,
         clarificationText: clarification
@@ -236,7 +304,8 @@ async function handleTelegramMediaCommand(text, options = {}) {
       return finalize({
         auditOutcome: result.resolverState,
         responseText: mapResultToTemplate(result, noun, {
-          originalQuery: `${pending.originalQuery} ${clarification}`.replace(/\s+/g, ' ').trim(),
+          originalQuery: canonicalQueryText(canonical),
+          canonical,
           candidates: result.candidates || pending.candidates || []
         })
       });
@@ -246,12 +315,13 @@ async function handleTelegramMediaCommand(text, options = {}) {
     if (result.resolverState === 'no_result') {
       return finalize({
         auditOutcome: 'pending_unresolved',
-        responseText: `I still couldn't resolve that media request. Please rerun /${pending.mediaType} ${pending.originalQuery}.`
+        responseText: `I still couldn't resolve that media request. Please rerun /${pending.mediaType} ${canonicalQueryText(pending.canonical || canonicalFromQuery(pending.originalQuery, pending.mediaType))}.`
       });
     }
     return finalize({
       auditOutcome: result.addResult === 'success' ? 'success' : result.resolverState || 'handled',
-      responseText: mapResultToTemplate(result, noun)
+      responseText: mapResultToTemplate(result, noun),
+      failure: executed.failure
     });
   }
 
@@ -296,12 +366,13 @@ async function handleTelegramMediaCommand(text, options = {}) {
   state.requestHistory.push({ userId, ts: now, command });
   state.recentRequests.push({ key, userId, ts: now, command, arg });
 
-  const requestText = `${arg} ${entry.requestSuffix}`;
+  const initialCanonical = canonicalFromQuery(arg, entry.requestSuffix);
+  const requestText = canonicalQueryText(initialCanonical, true);
   const noun = entry.targetService;
   const executed = await executeMediaRequest({ runner, requestText, noun });
   if (!executed.ok) {
     clearPendingFor(state, userId, chatId);
-    return finalize({ auditOutcome: 'backend_unavailable', responseText: executed.responseText });
+    return finalize({ auditOutcome: 'backend_unavailable', responseText: executed.responseText, failure: executed.failure });
   }
 
   const result = executed.result;
@@ -321,7 +392,8 @@ async function handleTelegramMediaCommand(text, options = {}) {
 
   return finalize({
     auditOutcome: result.addResult === 'success' ? 'success' : result.resolverState || 'handled',
-    responseText: mapResultToTemplate(result, noun, { originalQuery: arg, candidates: result.candidates || [] })
+    responseText: mapResultToTemplate(result, noun, { originalQuery: arg, canonical: initialCanonical, candidates: result.candidates || [] }),
+    failure: executed.failure
   });
 }
 

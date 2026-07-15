@@ -52,12 +52,55 @@ function parseRequest(input) {
   return { raw, title, year, typeHint, explicitMovie, explicitSeries, seasonHint, normalizedTitle: normalizeTitle(title), lower };
 }
 
+
+function classifyFetchException(err) {
+  const message = String(err?.message || err || '');
+  const causeMessage = String(err?.cause?.message || '');
+  const code = String(err?.cause?.code || err?.code || '');
+  const haystack = `${code} ${message} ${causeMessage}`;
+  if (/ENOTFOUND|EAI_AGAIN/i.test(haystack)) return 'DNS';
+  if (/ECONNREFUSED/i.test(haystack)) return 'connection_refused';
+  if (/ETIMEDOUT|UND_ERR_CONNECT_TIMEOUT|timeout|aborted/i.test(haystack)) return 'timeout';
+  if (/CERT|TLS|SSL|UNABLE_TO_VERIFY|DEPTH_ZERO/i.test(haystack)) return 'TLS';
+  return 'other';
+}
+
+function classifyHttpStatus(status) {
+  if (status === 401 || status === 403) return 'HTTP 401/403';
+  if (status === 404) return 'HTTP 404';
+  if (status >= 500) return 'HTTP 5xx';
+  if (status >= 400) return `HTTP ${status}`;
+  return 'ok';
+}
+
+function safeFailureMeta(kind, fetchResult) {
+  return {
+    phase: kind,
+    category: fetchResult.failureCategory || classifyHttpStatus(Number(fetchResult.status || 0)),
+    status: Number.isFinite(Number(fetchResult.status)) ? Number(fetchResult.status) : null,
+    errorClass: fetchResult.errorClass || null
+  };
+}
+
 async function fetchJson(url, apiKey) {
-  const res = await fetch(url, { headers: { 'X-Api-Key': apiKey, Accept: 'application/json' } });
-  const text = await res.text();
-  let data = null;
-  try { data = text ? JSON.parse(text) : null; } catch {}
-  return { status: res.status, ok: res.ok, data, text };
+  try {
+    const res = await fetch(url, { headers: { 'X-Api-Key': apiKey, Accept: 'application/json' } });
+    const text = await res.text();
+    let data = null;
+    let jsonOk = true;
+    try { data = text ? JSON.parse(text) : null; } catch { jsonOk = false; }
+    const failureCategory = !jsonOk ? 'invalid_JSON' : classifyHttpStatus(res.status);
+    return { status: res.status, ok: res.ok && jsonOk, data, text: '', failureCategory };
+  } catch (err) {
+    return {
+      status: null,
+      ok: false,
+      data: null,
+      text: '',
+      failureCategory: classifyFetchException(err),
+      errorClass: err?.name || err?.constructor?.name || 'Error'
+    };
+  }
 }
 
 function serviceConfig(cfg, name) {
@@ -153,7 +196,7 @@ function nuanceForExisting(entry) {
 async function resolveForType(type, parsed, svcCfg) {
   const lookup = type === 'movie' ? await lookupMovies(svcCfg, parsed.title) : await lookupSeries(svcCfg, parsed.title);
   if (!lookup.ok || !Array.isArray(lookup.data)) {
-    return { type, state: 'lookup_error', reason: `lookup failed (${lookup.status})` };
+    return { type, state: 'lookup_error', reason: `lookup failed (${lookup.status ?? 'no_status'})`, failure: safeFailureMeta('lookup', lookup) };
   }
   const candidates = chooseCandidates(lookup.data, parsed, type);
   if (candidates.length === 0) return { type, state: 'no_result' };
@@ -168,7 +211,7 @@ async function resolveForType(type, parsed, svcCfg) {
 
   const library = type === 'movie' ? await libraryMovies(svcCfg) : await librarySeries(svcCfg);
   if (!library.ok || !Array.isArray(library.data)) {
-    return { type, state: 'library_error', reason: `library failed (${library.status})`, candidate: best };
+    return { type, state: 'library_error', reason: `library failed (${library.status ?? 'no_status'})`, failure: safeFailureMeta('library', library), candidate: best };
   }
   const ids = extractIds(best.item, type);
   const existing = findExistingByIds(library.data, ids, type) || findExistingByTitleYear(library.data, best.item, type);
@@ -249,7 +292,8 @@ function summarize(result) {
     resolutionState: result.state,
     clarificationRequired: result.state === 'ambiguous' || result.state === 'low_confidence',
     matchedTitle,
-    nuance: result.nuance || null
+    nuance: result.nuance || null,
+    failure: result.failure || null
   };
 }
 

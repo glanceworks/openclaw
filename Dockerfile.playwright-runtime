@@ -33,6 +33,8 @@ COPY deployment/telegram-media-gate/deployment-manifest.json \
   /opt/openclaw-telegram-media-gate/deployment/
 COPY deployment/telegram-media-gate/tools/ \
   /opt/openclaw-telegram-media-gate/deployment/tools/
+COPY deployment/telegram-media-gate/tests/runtime-media-clarification-smoke.mjs \
+  /opt/openclaw-telegram-media-gate/deployment/tests/
 
 RUN python3 /opt/openclaw-telegram-media-gate/deployment/tools/validate_base_image.py \
       --manifest /opt/openclaw-telegram-media-gate/deployment/deployment-manifest.json \

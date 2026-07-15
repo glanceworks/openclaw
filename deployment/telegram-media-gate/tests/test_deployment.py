@@ -21,6 +21,9 @@ EVIDENCE = DEPLOYMENT / "evidence/known-good-image-20260713T045521Z.json"
 REGISTRY_EVIDENCE = DEPLOYMENT / "evidence/registry-openclaw-2026.5.4-20260713T163330Z.json"
 DOCKERFILE = DEPLOYMENT.parents[1] / "Dockerfile.playwright-runtime"
 COMPOSE = DEPLOYMENT.parents[1] / "docker-compose.yml"
+YEAR_FIX_PROVENANCE = DEPLOYMENT / "provenance/year-clarification-refresh-2168d50.json"
+RUNTIME_SMOKE = HERE / "runtime-media-clarification-smoke.mjs"
+RUNBOOK = DEPLOYMENT / "RUNBOOK.md"
 EXPECTED_IMAGE_ENTRYPOINT = (
     'ENTRYPOINT ["/opt/openclaw-telegram-media-gate/deployment/entrypoint.sh"]'
 )
@@ -228,15 +231,223 @@ class DeploymentFrameworkTests(unittest.TestCase):
         self.assertEqual(result["args"], ["one", "two words", ""])
         self.assertEqual(result["pid"], launched_pid)
 
-    def test_runtime_export_hashes_match_provenance(self):
+    def test_runtime_hashes_match_layered_provenance(self):
         export = json.loads((DEPLOYMENT / "provenance/export-manifest.json").read_text())
-        declared = {
+        refresh = json.loads(YEAR_FIX_PROVENANCE.read_text())
+        baseline = {
             entry["original_repository_path"]: entry["sha256"]
             for entry in export["files"] if entry["classification"] == "runtime"
         }
+        declared = dict(baseline)
+        refreshed_paths = set()
+        for entry in refresh["files"]:
+            self.assertEqual(baseline[entry["source_path"]], entry["old_sha256"])
+            declared[entry["source_path"]] = entry["new_sha256"]
+            refreshed_paths.add(entry["source_path"])
         self.assertEqual(len(declared), 8)
+        self.assertEqual(
+            refreshed_paths,
+            {
+                "scripts/telegram-media-handler.mjs",
+                "scripts/media-mvp-resolve.mjs",
+                "scripts/media-mvp-add-gated.mjs",
+            },
+        )
+        changed_from_baseline = set()
         for rel, expected in declared.items():
-            self.assertEqual(sha((DEPLOYMENT / "runtime" / rel).read_bytes()), expected)
+            actual = sha((DEPLOYMENT / "runtime" / rel).read_bytes())
+            self.assertEqual(actual, expected)
+            if actual != baseline[rel]:
+                changed_from_baseline.add(rel)
+        self.assertEqual(changed_from_baseline, refreshed_paths)
+        manifest_hashes = {
+            entry["image_relative_path"]: entry["sha256"]
+            for entry in load_manifest(MANIFEST)["runtime_files"]
+        }
+        self.assertEqual(manifest_hashes, declared)
+        self.assertEqual(refresh["source_commit"], "2168d504507edf6117a13f9b9aeef2ac88808bb2")
+        self.assertEqual(refresh["parent_commit"], "580007d45bd4e903d829d1f17ed61dd4341e0dcd")
+        self.assertEqual(
+            refresh["archive_sha256"],
+            "659a3b69e5b4bd05f5d8483d0789a8172bda7d162259eb982b6fb0daabcb292b",
+        )
+        self.assertFalse(refresh["exact_historical_lookup_error_reproduced"])
+        self.assertFalse(refresh["test_only_provenance"]["copied_into_image_runtime"])
+        self.assertFalse((DEPLOYMENT / "runtime/scripts/telegram-media-pending-tests.mjs").exists())
+
+    def test_year_clarification_runtime_contract_fixtures_are_offline(self):
+        handler = (DEPLOYMENT / "runtime/scripts/telegram-media-handler.mjs").read_text()
+        resolver = (DEPLOYMENT / "runtime/scripts/media-mvp-resolve.mjs").read_text()
+        gated = (DEPLOYMENT / "runtime/scripts/media-mvp-add-gated.mjs").read_text()
+        for snippet in (
+            "function canonicalFromQuery(query, mediaType)",
+            "function mergeClarificationIntoCanonical(pending, clarification)",
+            "return { ...current, year: Number(bareYear[1]) }",
+            "const requestText = canonicalQueryText(canonical, true)",
+            "function safeFailureForLog(result)",
+        ):
+            self.assertIn(snippet, handler)
+        self.assertIn("failure: safeFailureMeta('lookup', lookup)", resolver)
+        self.assertIn("failure: safeFailureMeta('library', library)", resolver)
+        self.assertIn("text: ''", resolver)
+        self.assertIn("failure: resolved.failure || null", gated)
+
+        data_root = self.root / "year-clarification-data"
+        state_path = data_root / "state/pending.json"
+        log_path = data_root / "logs/failures.jsonl"
+        state_path.parent.mkdir(parents=True)
+        log_path.parent.mkdir(parents=True)
+        runner_inputs = []
+
+        def parse_title_year(value):
+            value = " ".join(str(value or "").split())
+            match = re.match(r"^(.*?)\s*\((19\d{2}|20\d{2}|21\d{2})\)$", value)
+            match = match or re.match(r"^(.*?)\s+(19\d{2}|20\d{2}|21\d{2})$", value)
+            return {
+                "title": match.group(1).strip() if match else value,
+                "year": int(match.group(2)) if match else None,
+            }
+
+        def canonical(value, media_type):
+            parsed = parse_title_year(value)
+            return {**parsed, "mediaType": "show" if media_type == "show" else "movie"}
+
+        def merge(pending, clarification):
+            current = dict(pending["canonical"])
+            value = " ".join(str(clarification or "").split())
+            if re.match(r"^(19\d{2}|20\d{2}|21\d{2})$", value):
+                return {**current, "year": int(value)}
+            parsed = parse_title_year(value)
+            return {
+                **current,
+                "title": parsed["title"] or current["title"],
+                "year": parsed["year"] or current["year"],
+            }
+
+        def query(value):
+            return " ".join(filter(None, (
+                value["title"], str(value["year"]) if value["year"] else None,
+                value["mediaType"],
+            )))
+
+        def stub_runner(value):
+            runner_inputs.append(value)
+            if value == "strange harvest 2026 movie":
+                return {"resolverState": "resolved", "addResult": "success"}
+            return {"resolverState": "low_confidence", "addResult": "not_attempted"}
+
+        pending = {"canonical": canonical("Dragons: Race to the Edge (2015)", "show")}
+        self.assertEqual(
+            pending["canonical"],
+            {"title": "Dragons: Race to the Edge", "year": 2015, "mediaType": "show"},
+        )
+        state_path.write_text(json.dumps(pending))
+        first = merge(pending, "2015")
+        second = merge({"canonical": first}, "2015")
+        self.assertEqual(first, pending["canonical"])
+        self.assertEqual(second, first)
+        self.assertEqual(query(second), "Dragons: Race to the Edge 2015 show")
+        stub_runner(query(second))
+        self.assertEqual(runner_inputs[-1], "Dragons: Race to the Edge 2015 show")
+
+        self.assertEqual(
+            canonical("Dragons: Race to the Edge 2015", "show"),
+            pending["canonical"],
+        )
+        specific = merge(pending, "Race to the Edge 2015")
+        self.assertEqual(
+            specific,
+            {"title": "Race to the Edge", "year": 2015, "mediaType": "show"},
+        )
+        movie = merge({"canonical": canonical("strange harvest", "movie")}, "2026")
+        self.assertEqual(query(movie), "strange harvest 2026 movie")
+        self.assertEqual(stub_runner(query(movie))["addResult"], "success")
+
+        approved = {"phase", "category", "status", "errorClass"}
+        sensitive = {
+            "url": "fixture-url", "apiKey": "fixture-key", "responseBody": "fixture-body",
+            "telegramId": "fixture-id", "secret": "fixture-secret",
+        }
+        for phase, category, status, error_class in (
+            ("lookup", "HTTP 5xx", 503, "Response"),
+            ("library", "timeout", None, "TimeoutError"),
+        ):
+            raw = {"phase": phase, "category": category, "status": status,
+                   "errorClass": error_class, **sensitive}
+            sanitized = {key: raw[key] for key in approved}
+            self.assertEqual(set(sanitized), approved)
+            serialized = json.dumps(sanitized)
+            for key, value in sensitive.items():
+                self.assertNotIn(key, serialized)
+                self.assertNotIn(value, serialized)
+            with log_path.open("a") as stream:
+                stream.write(json.dumps(sanitized) + "\n")
+
+        self.assertTrue(state_path.is_relative_to(self.root))
+        self.assertTrue(log_path.is_relative_to(self.root))
+        self.assertNotIn("/home/deploy", str(data_root))
+        self.assertNotIn("/app/dist", str(data_root))
+
+    def test_node_runtime_smoke_contract_is_static_safe_and_image_copyable(self):
+        self.assertTrue(RUNTIME_SMOKE.is_file())
+        source = RUNTIME_SMOKE.read_text()
+        self.assertIn("OPENCLAW_TELEGRAM_MEDIA_RUNTIME_ROOT", source)
+        self.assertIn("new URL('../runtime/scripts/', import.meta.url)", source)
+        self.assertIn("telegram-media-gate.mjs", source)
+        self.assertIn("telegram-media-handler.mjs", source)
+        self.assertEqual(source.count("await import("), 2)
+        for scenario in (
+            "/show Dragons: Race to the Edge (2015)",
+            "/show Dragons: Race to the Edge 2015",
+            "await mediaAccess('2015')",
+            "await mediaAccess('Race to the Edge 2015')",
+            "/movie strange harvest",
+            "await mediaAccess('2026')",
+            "lookup_error",
+            "library_error",
+            "sensitive-api-key-value",
+            "sensitive-url-value",
+            "sensitive-response-body-value",
+            "sensitive-token-value",
+            "userId: 'smoke-user'",
+            "runtime media clarification smoke passed",
+        ):
+            self.assertIn(scenario, source)
+        self.assertIn("fs.mkdtempSync", source)
+        self.assertIn("fs.rmSync(dataRoot, { recursive: true, force: true })", source)
+        self.assertIn("globalThis.fetch = async () =>", source)
+        for forbidden in (
+            "node:child_process", "docker ", "docker-compose", "node:http",
+            "node:https", "node:net", "node:tls", "/home/deploy", "/app/dist",
+            "/home/node/.openclaw/workspace-coordinator",
+        ):
+            self.assertNotIn(forbidden, source)
+        dockerfile = DOCKERFILE.read_text()
+        self.assertEqual(
+            dockerfile.count(
+                "COPY deployment/telegram-media-gate/tests/"
+                "runtime-media-clarification-smoke.mjs"
+            ),
+            1,
+        )
+        self.assertIn(
+            "/opt/openclaw-telegram-media-gate/deployment/tests/", dockerfile
+        )
+        runbook = RUNBOOK.read_text()
+        self.assertIn("This isolated source host has no Node runtime", runbook)
+        self.assertIn("--network none", runbook)
+        self.assertIn("--read-only", runbook)
+        self.assertIn("--tmpfs /tmp:rw,nosuid,nodev,size=16m", runbook)
+        self.assertIn(
+            "OPENCLAW_TELEGRAM_MEDIA_RUNTIME_ROOT="
+            "/opt/openclaw-telegram-media-gate/scripts",
+            runbook,
+        )
+        self.assertIn(
+            "/opt/openclaw-telegram-media-gate/deployment/tests/"
+            "runtime-media-clarification-smoke.mjs",
+            runbook,
+        )
 
     def test_runtime_has_no_executable_import_from_mutable_data_root(self):
         for source in (DEPLOYMENT / "runtime/scripts").glob("*.mjs"):

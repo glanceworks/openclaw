@@ -4,6 +4,21 @@
   "runtime_source_commit": "580007d45bd4e903d829d1f17ed61dd4341e0dcd",
   "patch_provenance_commit": "6049d34d751333d8d0dd6a77d506c9a42d19d495",
   "archive_sha256": "97de9b43bc680614b28ce33d245ece5a0df8bbb91af3b8662ccafe9a330a676e",
+  "runtime_refreshes": [
+    {
+      "source_commit": "2168d504507edf6117a13f9b9aeef2ac88808bb2",
+      "parent_commit": "580007d45bd4e903d829d1f17ed61dd4341e0dcd",
+      "archive_sha256": "659a3b69e5b4bd05f5d8483d0789a8172bda7d162259eb982b6fb0daabcb292b",
+      "provenance_record": "provenance/year-clarification-refresh-2168d50.json",
+      "reason": [
+        "canonical pending {title, year, mediaType}",
+        "bare-year merge is idempotent",
+        "stable low-confidence query",
+        "sanitized lookup/library error metadata"
+      ],
+      "exact_historical_lookup_error_reproduced": false
+    }
+  ],
   "runtime_files": [
     {
       "source_path": "runtime/scripts/telegram-media-gate.mjs",
@@ -13,7 +28,7 @@
     {
       "source_path": "runtime/scripts/telegram-media-handler.mjs",
       "image_relative_path": "scripts/telegram-media-handler.mjs",
-      "sha256": "7c17d1d81fe0df9b96963fd6b7afc7f7a8dbe48dd040b5a1a3fcff0c935c241e"
+      "sha256": "31bf92d01ff9c9ec9e3be18c7daff70fc40e627086e5a256015e7154a3c134ad"
     },
     {
       "source_path": "runtime/scripts/telegram-media-invite.mjs",
@@ -33,12 +48,12 @@
     {
       "source_path": "runtime/scripts/media-mvp-add-gated.mjs",
       "image_relative_path": "scripts/media-mvp-add-gated.mjs",
-      "sha256": "1266ed075484704350d1ea29105a93994f14dd55b25a16a08835fe31e1e67da0"
+      "sha256": "2dce4401dea21096a4f6b48fe593e314fb091e1e4a0bb6296b340749bb509c91"
     },
     {
       "source_path": "runtime/scripts/media-mvp-resolve.mjs",
       "image_relative_path": "scripts/media-mvp-resolve.mjs",
-      "sha256": "bce480e8c08609fed1e1a10d807912aae23988cee37045920fd3b7546f174e17"
+      "sha256": "67006583e15062fa89d01e7b68ebbe9f02b2e5ac077b022ba2406d0fcb4d62aa"
     },
     {
       "source_path": "runtime/config/telegram-media-commands.json",

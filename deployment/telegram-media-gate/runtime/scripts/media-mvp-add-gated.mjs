@@ -141,6 +141,7 @@ async function runOne(input) {
     matchedTitle: summary,
     nuance: resolved.nuance || null,
     candidates: summarizeCandidates(resolved.candidates, resolved.type || (resolved.targetService === 'sonarr' ? 'series' : resolved.targetService === 'radarr' ? 'movie' : null)),
+    failure: resolved.failure || null,
     finalUserFacingResponse: ''
   };
 
