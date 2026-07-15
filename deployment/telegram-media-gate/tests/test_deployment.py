@@ -409,11 +409,38 @@ class DeploymentFrameworkTests(unittest.TestCase):
             "sensitive-url-value",
             "sensitive-response-body-value",
             "sensitive-token-value",
-            "userId: 'smoke-user'",
+            "FULL_ACCESS_USER_ID",
+            "MEDIA_ONLY_USER_ID",
+            "UNKNOWN_USER_ID",
+            "mediaRequestUserIds: [MEDIA_ONLY_USER_ID]",
+            "unknownResult.decision, 'ignore'",
+            "result.reason, 'media_request_user'",
             "runtime media clarification smoke passed",
         ):
             self.assertIn(scenario, source)
         self.assertIn("fs.mkdtempSync", source)
+        self.assertIn("path.join(dataRoot, 'config', 'telegram-media-access.json')", source)
+        self.assertIn("fullAccessUserIds: [FULL_ACCESS_USER_ID]", source)
+        self.assertIn("mediaRequestUserIds: [MEDIA_ONLY_USER_ID]", source)
+        fixture_ids = dict(re.findall(
+            r"const (FULL_ACCESS_USER_ID|MEDIA_ONLY_USER_ID|UNKNOWN_USER_ID) = '(\d+)';",
+            source,
+        ))
+        self.assertEqual(
+            fixture_ids,
+            {
+                "FULL_ACCESS_USER_ID": "900000000000001",
+                "MEDIA_ONLY_USER_ID": "900000000000002",
+                "UNKNOWN_USER_ID": "900000000000003",
+            },
+        )
+        self.assertLess(
+            source.index("process.env.OPENCLAW_TELEGRAM_MEDIA_DATA_ROOT = dataRoot"),
+            source.index("await import("),
+        )
+        self.assertIn("provider: 'telegram', senderId, chatId: senderId", source)
+        self.assertIn("assert.equal(unknownResult.decision, 'ignore')", source)
+        self.assertIn("assert.equal(result.decision, 'intercept_media_only')", source)
         self.assertIn("fs.rmSync(dataRoot, { recursive: true, force: true })", source)
         self.assertIn("globalThis.fetch = async () =>", source)
         for forbidden in (

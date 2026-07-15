@@ -17,13 +17,16 @@ const previousFetch = globalThis.fetch;
 process.env.OPENCLAW_TELEGRAM_MEDIA_DATA_ROOT = dataRoot;
 globalThis.fetch = async () => { throw new Error('network access is forbidden in this smoke test'); };
 
+const FULL_ACCESS_USER_ID = '900000000000001';
+const MEDIA_ONLY_USER_ID = '900000000000002';
+const UNKNOWN_USER_ID = '900000000000003';
 const runnerInputs = [];
 const sensitiveFailureFields = {
   apiKey: 'sensitive-api-key-value',
   url: 'sensitive-url-value',
   responseBody: 'sensitive-response-body-value',
   token: 'sensitive-token-value',
-  userId: 'smoke-user'
+  userId: MEDIA_ONLY_USER_ID
 };
 
 function lowConfidence(title = 'Dragons: Race to the Edge') {
@@ -98,7 +101,9 @@ function assertSanitized(result, log, expectedFailure) {
 try {
   fs.mkdirSync(path.dirname(configPath), { recursive: true });
   fs.writeFileSync(configPath, JSON.stringify({ telegram: {
-    fullAccessUserIds: ['smoke-user'], mediaRequestUserIds: [], unknownUserAction: 'ignore'
+    fullAccessUserIds: [FULL_ACCESS_USER_ID],
+    mediaRequestUserIds: [MEDIA_ONLY_USER_ID],
+    unknownUserAction: 'ignore'
   }}, null, 2) + '\n');
 
   const gateUrl = pathToFileURL(path.join(runtimeRoot, 'telegram-media-gate.mjs')).href;
@@ -107,13 +112,20 @@ try {
   const { handleTelegramMediaCommand } = await import(handlerUrl);
   const mediaHandler = (text, options = {}) =>
     handleTelegramMediaCommand(text, { ...options, runner });
-  const mediaAccess = (text) => evaluateTelegramMediaAccess({
-    provider: 'telegram', senderId: 'smoke-user', chatId: 'smoke-chat', text, mediaHandler
+  const mediaAccess = (text, senderId = MEDIA_ONLY_USER_ID) => evaluateTelegramMediaAccess({
+    provider: 'telegram', senderId, chatId: senderId, text, mediaHandler
   });
+
+  resetMutableData();
+  const unknownResult = await mediaAccess('/show Dragons: Race to the Edge (2015)', UNKNOWN_USER_ID);
+  assert.equal(unknownResult.decision, 'ignore');
+  assert.equal(unknownResult.reason, 'unknown_user');
+  assert.equal(runnerInputs.length, 0);
 
   resetMutableData();
   let result = await mediaAccess('/show Dragons: Race to the Edge (2015)');
   assert.equal(result.decision, 'intercept_media_only');
+  assert.equal(result.reason, 'media_request_user');
   assert.equal(runnerInputs.at(-1), 'Dragons: Race to the Edge 2015 show');
   assert.match(result.responseText, /Dragons: Race to the Edge 2015/);
   assert.doesNotMatch(result.responseText, /2015 2015/);
