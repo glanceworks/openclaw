@@ -41,7 +41,7 @@ function parseRequest(input) {
   else if (seasonHint) typeHint = 'series';
 
   let title = raw
-    .replace(/^(add|get|download|download the|add the|get the)\s+/i, '')
+    .replace(/^(download the|add the|get the|add|get|download)\s+/i, '')
     .replace(/\b(movie|film|show|series|tv)\b/gi, ' ')
     .replace(/\bseason\s+\d+\b/gi, ' ')
     .replace(/\b(19\d{2}|20\d{2}|21\d{2})\b/g, ' ')
@@ -159,6 +159,14 @@ function chooseCandidates(data, parsed, type) {
   return scored;
 }
 
+function exactCanonicalCandidates(candidates, parsed) {
+  return candidates.filter(candidate => {
+    if (normalizeTitle(candidate.title) !== parsed.normalizedTitle) return false;
+    if (parsed.year && Number(candidate.year) !== Number(parsed.year)) return false;
+    return true;
+  });
+}
+
 function extractIds(item, type) {
   return {
     tmdbId: item.tmdbId ?? null,
@@ -200,7 +208,11 @@ async function resolveForType(type, parsed, svcCfg) {
   }
   const candidates = chooseCandidates(lookup.data, parsed, type);
   if (candidates.length === 0) return { type, state: 'no_result' };
-  const strong = strongCandidates(candidates);
+  const exact = exactCanonicalCandidates(candidates, parsed);
+  if (exact.length === 1) {
+    candidates.splice(0, candidates.length, exact[0], ...candidates.filter(candidate => candidate !== exact[0]));
+  }
+  const strong = exact.length === 1 ? [exact[0]] : strongCandidates(candidates);
   if (strong.length > 1) {
     return { type, state: 'ambiguous', candidates: strong.slice(0, 3) };
   }

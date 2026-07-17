@@ -10,12 +10,12 @@ const runtimeRoot = path.resolve(
 );
 const dataRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'runtime-media-clarification-'));
 const configPath = path.join(dataRoot, 'config', 'telegram-media-access.json');
+const resolverConfigPath = path.join(dataRoot, 'config', 'media-request-mvp.json');
 const statePath = path.join(dataRoot, 'state', 'telegram-media-runtime.json');
 const logPath = path.join(dataRoot, 'logs', 'telegram-media-requests.jsonl');
 const previousDataRoot = process.env.OPENCLAW_TELEGRAM_MEDIA_DATA_ROOT;
 const previousFetch = globalThis.fetch;
 process.env.OPENCLAW_TELEGRAM_MEDIA_DATA_ROOT = dataRoot;
-globalThis.fetch = async () => { throw new Error('network access is forbidden in this smoke test'); };
 
 const FULL_ACCESS_USER_ID = '900000000000001';
 const MEDIA_ONLY_USER_ID = '900000000000002';
@@ -24,6 +24,7 @@ const SYNTHETIC_CHAT_ID = '-900000000000004';
 const APPROVED_FAILURE_KEYS = ['category', 'errorClass', 'phase', 'status'];
 const FORBIDDEN_FAILURE_KEYS = ['apiKey', 'url', 'responseBody', 'token', 'userId', 'senderId', 'chatId', 'message', 'stack'];
 const runnerInputs = [];
+const resolverFetches = [];
 const sensitiveFailureFields = {
   apiKey: 'sensitive-api-key-value',
   url: 'sensitive-url-value',
@@ -40,12 +41,51 @@ const SENSITIVE_SURFACE_VALUES = [...new Set([
   UNKNOWN_USER_ID
 ])];
 
+const dragonsCandidates = [
+  { title: 'Dragons', year: 2012, type: 'series' },
+  { title: 'Dragons: Race to the Edge', year: 2015, type: 'series' }
+];
+const sonarrLookup = {
+  'dragons race to the edge': [
+    { title: 'Dragons', year: 2012, firstAired: '2012-08-07', tvdbId: 261202 },
+    { title: 'Dragons: Race to the Edge', year: 2015, firstAired: '2015-06-26', tvdbId: 293117 }
+  ]
+};
+function normalizeLookupTerm(value) {
+  return String(value || '').toLowerCase().replace(/&/g, 'and')
+    .replace(/[^a-z0-9]+/g, ' ').trim().replace(/\s+/g, ' ');
+}
+function fixtureResponse(data) {
+  return { status: 200, ok: true, async text() { return JSON.stringify(data); } };
+}
+globalThis.fetch = async (url, options = {}) => {
+  const parsed = new URL(url);
+  const method = String(options.method || 'GET').toUpperCase();
+  resolverFetches.push({ hostname: parsed.hostname, pathname: parsed.pathname, method });
+  assert.equal(method, 'GET', 'the resolver smoke must not exercise media add operations');
+  if (parsed.hostname === 'fixture-sonarr' && parsed.pathname === '/api/v3/series/lookup') {
+    return fixtureResponse(sonarrLookup[normalizeLookupTerm(parsed.searchParams.get('term'))] || []);
+  }
+  if (parsed.hostname === 'fixture-sonarr' && parsed.pathname === '/api/v3/series') {
+    return fixtureResponse([]);
+  }
+  if (parsed.hostname === 'fixture-radarr' && parsed.pathname === '/api/v3/movie/lookup') {
+    return fixtureResponse([]);
+  }
+  if (parsed.hostname === 'fixture-radarr' && parsed.pathname === '/api/v3/movie') {
+    return fixtureResponse([]);
+  }
+  throw new Error(`network access is forbidden; unexpected fixture URL: ${url}`);
+};
+
 function lowConfidence(title = 'Dragons: Race to the Edge') {
   return {
     resolverState: 'low_confidence',
     addResult: 'not_attempted',
     matchedTitle: `${title} (2015)`,
-    candidates: [{ title, year: 2015, type: 'series' }]
+    candidates: title === 'Dragons: Race to the Edge'
+      ? dragonsCandidates
+      : [{ title, year: 2015, type: 'series' }]
   };
 }
 
@@ -77,7 +117,14 @@ const runner = async (input) => {
     matchedTitle: 'Strange Harvest (2026)', candidates: []
   };
   if (query === 'dragons: race to the edge show') return lowConfidence();
-  if (query === 'dragons: race to the edge 2015 show') return lowConfidence();
+  if (query === 'dragons: race to the edge 2015 show') return {
+    resolverState: 'resolved', addResult: 'success',
+    matchedTitle: 'Dragons: Race to the Edge (2015)', candidates: []
+  };
+  if (query === 'dragons 2015 show' || query === 'dragons show') return {
+    resolverState: 'ambiguous', addResult: 'not_attempted', matchedTitle: null,
+    candidates: dragonsCandidates
+  };
   if (query === 'race to the edge 2015 show') return lowConfidence('Race to the Edge');
   if (query === 'broken lookup show') return lookupFailure(503, 'HTTP 5xx');
   if (query === 'broken status 401 show') return lookupFailure(401, 'HTTP 401/403');
@@ -175,11 +222,17 @@ try {
     unknownUserAction: 'ignore'
   }};
   fs.writeFileSync(configPath, JSON.stringify(accessConfig, null, 2) + '\n');
+  fs.writeFileSync(resolverConfigPath, JSON.stringify({
+    sonarr: { baseUrl: 'http://fixture-sonarr', apiKey: 'fixture-sonarr-key' },
+    radarr: { baseUrl: 'http://fixture-radarr', apiKey: 'fixture-radarr-key' }
+  }, null, 2) + '\n');
 
   const gateUrl = pathToFileURL(path.join(runtimeRoot, 'telegram-media-gate.mjs')).href;
   const handlerUrl = pathToFileURL(path.join(runtimeRoot, 'telegram-media-handler.mjs')).href;
+  const resolverUrl = pathToFileURL(path.join(runtimeRoot, 'media-mvp-resolve.mjs')).href;
   const { evaluateTelegramMediaAccess } = await import(gateUrl);
   const { handleTelegramMediaCommand } = await import(handlerUrl);
+  const { resolveRequest, summarize } = await import(resolverUrl);
   const mediaHandler = (text, options = {}) =>
     handleTelegramMediaCommand(text, { ...options, runner });
   let requestEnvelope = null;
@@ -196,28 +249,71 @@ try {
   assert.equal(unknownResult.reason, 'unknown_user');
   assert.equal(runnerInputs.length, 0);
 
+  for (const query of [
+    'Dragons: Race to the Edge (2015) show',
+    'Dragons: Race to the Edge 2015 show'
+  ]) {
+    const resolved = await resolveRequest(query);
+    const summary = summarize(resolved);
+    assert.equal(summary.classification, 'series');
+    assert.equal(summary.targetService, 'sonarr');
+    assert.equal(summary.resolutionState, 'resolved');
+    assert.equal(summary.matchedTitle, 'Dragons: Race to the Edge (2015)');
+    assert.notEqual(summary.matchedTitle, 'Dragons (2012)');
+  }
+  assert.equal(resolverFetches.length, 4);
+  assert.ok(resolverFetches.every(({ hostname, method }) =>
+    hostname === 'fixture-sonarr' && method === 'GET'));
+
   resetMutableData();
   let result = await mediaAccess('/show Dragons: Race to the Edge (2015)');
   assert.equal(result.decision, 'intercept_media_only');
   assert.equal(result.reason, 'media_request_user');
   assert.equal(runnerInputs.at(-1), 'Dragons: Race to the Edge 2015 show');
-  assert.match(result.responseText, /Dragons: Race to the Edge 2015/);
-  assert.doesNotMatch(result.responseText, /2015 2015/);
-  assertCanonical({ title: 'Dragons: Race to the Edge', year: 2015, mediaType: 'show' });
-
-  result = await mediaAccess('2015');
-  assert.equal(runnerInputs.at(-1), 'Dragons: Race to the Edge 2015 show');
-  assert.doesNotMatch(result.responseText, /2015 2015/);
-  assertCanonical({ title: 'Dragons: Race to the Edge', year: 2015, mediaType: 'show' });
-  result = await mediaAccess('2015');
-  assert.equal(runnerInputs.at(-1), 'Dragons: Race to the Edge 2015 show');
-  assert.doesNotMatch(result.responseText, /2015 2015/);
-  assertCanonical({ title: 'Dragons: Race to the Edge', year: 2015, mediaType: 'show' });
+  assert.equal(result.responseText, 'Dragons: Race to the Edge (2015) added to Sonarr.');
+  assert.equal(readState().pendingClarifications.length, 0);
 
   resetMutableData();
-  await mediaAccess('/show Dragons: Race to the Edge 2015');
+  result = await mediaAccess('/show Dragons: Race to the Edge 2015');
   assert.equal(runnerInputs.at(-1), 'Dragons: Race to the Edge 2015 show');
-  assertCanonical({ title: 'Dragons: Race to the Edge', year: 2015, mediaType: 'show' });
+  assert.equal(result.responseText, 'Dragons: Race to the Edge (2015) added to Sonarr.');
+  assert.equal(readState().pendingClarifications.length, 0);
+
+  resetMutableData();
+  result = await mediaAccess('/show Dragons 2015');
+  assert.match(result.responseText,
+    /1\. Dragons \(2012\) show; 2\. Dragons: Race to the Edge \(2015\) show/);
+  assertCanonical({ title: 'Dragons', year: 2015, mediaType: 'show' });
+  const beforeNoProgressCount = runnerInputs.length;
+  const firstPrompt = result.responseText;
+
+  result = await mediaAccess('2015');
+  assert.equal(runnerInputs.length, beforeNoProgressCount);
+  assert.match(result.responseText, /I already have 2015 for Dragons 2015/);
+  assert.match(result.responseText, /Reply with a number or a more specific title/);
+  assert.notEqual(result.responseText, firstPrompt);
+  assert.equal(readLogs().at(-1).outcome, 'pending_no_progress');
+  assertCanonical({ title: 'Dragons', year: 2015, mediaType: 'show' });
+
+  const firstNoProgressPrompt = result.responseText;
+  result = await mediaAccess('2015');
+  assert.equal(runnerInputs.length, beforeNoProgressCount);
+  assert.notEqual(result.responseText, firstNoProgressPrompt);
+  assert.match(result.responseText, /Still no change/);
+  assert.equal(readLogs().at(-1).outcome, 'pending_no_progress');
+  assertCanonical({ title: 'Dragons', year: 2015, mediaType: 'show' });
+
+  result = await mediaAccess('9');
+  assert.equal(runnerInputs.length, beforeNoProgressCount);
+  assert.match(result.responseText, /isn't a valid selection/);
+  assert.match(result.responseText,
+    /1\. Dragons \(2012\) show; 2\. Dragons: Race to the Edge \(2015\) show/);
+  assert.equal(readLogs().at(-1).outcome, 'pending_invalid_selection');
+
+  result = await mediaAccess('2');
+  assert.equal(runnerInputs.at(-1), 'Dragons: Race to the Edge 2015 show');
+  assert.equal(result.responseText, 'Dragons: Race to the Edge (2015) added to Sonarr.');
+  assert.equal(readState().pendingClarifications.length, 0);
 
   resetMutableData();
   await mediaAccess('/show Dragons: Race to the Edge');

@@ -105,6 +105,33 @@ function candidateOptionsText(candidates) {
   return unique;
 }
 
+function candidateOptionObjects(candidates) {
+  const unique = [];
+  const seen = new Set();
+  for (const candidate of Array.isArray(candidates) ? candidates : []) {
+    const label = formatCandidate(candidate);
+    if (!label || seen.has(label)) continue;
+    seen.add(label);
+    unique.push({
+      title: String(candidate?.title || candidate?.matchedTitle || '').trim(),
+      year: candidate?.year ? Number(candidate.year) : null,
+      type: candidate?.type === 'series' ? 'series' : candidate?.type === 'movie' ? 'movie' : null,
+      label
+    });
+    if (unique.length >= 4) break;
+  }
+  return unique;
+}
+
+function parseNumberedSelection(text, candidates) {
+  const match = String(text || '').trim().match(/^\d{1,2}$/);
+  if (!match) return { kind: 'none' };
+  const index = Number(match[0]);
+  const options = candidateOptionObjects(candidates);
+  if (index >= 1 && index <= options.length) return { kind: 'valid', index, candidate: options[index - 1], count: options.length };
+  return { kind: 'invalid', index, count: options.length };
+}
+
 function parseTitleYear(text) {
   const raw = String(text || '').trim().replace(/\s+/g, ' ');
   const parenMatch = raw.match(/^(.*?)\s*\((19\d{2}|20\d{2}|21\d{2})\)\s*$/);
@@ -153,6 +180,10 @@ function canonicalQueryText(canonical, includeMediaType = false) {
   return `${title}${year}${mediaType}`.trim();
 }
 
+function canonicalEquals(a, b) {
+  return canonicalQueryText(a, true).toLowerCase() === canonicalQueryText(b, true).toLowerCase();
+}
+
 function safeFailureForLog(result) {
   const failure = result?.failure;
   if (!failure || typeof failure !== 'object') return null;
@@ -171,9 +202,34 @@ function clarificationPrompt(result, pending = null) {
     ? `I found multiple likely matches for ${query}.`
     : 'I found multiple likely matches.';
   if (options.length > 0) {
-    return `${base} Reply with the year or a more specific title: ${options.join('; ')}.`;
+    const numbered = options.map((option, index) => `${index + 1}. ${option}`).join('; ');
+    return `${base} Reply with a number, the year, or a more specific title: ${numbered}.`;
   }
   return `${base} Reply with the year or a more specific title.`;
+}
+
+function noProgressClarificationPrompt(pending) {
+  const query = pending?.canonical ? canonicalQueryText(pending.canonical) : pending?.originalQuery;
+  const options = candidateOptionsText(pending?.candidates || []);
+  const year = pending?.canonical?.year ? Number(pending.canonical.year) : null;
+  const repeated = Number(pending?.noProgressCount || 0) > 1;
+  const base = year
+    ? `${repeated ? 'Still no change: I' : 'I'} already have ${year}${query ? ` for ${query}` : ''}.`
+    : `${repeated ? 'Still no change: t' : 'T'}hat doesn't narrow the media request${query ? ` for ${query}` : ''}.`;
+  if (options.length > 0) {
+    const numbered = options.map((option, index) => `${index + 1}. ${option}`).join('; ');
+    return `${base} Reply with a number or a more specific title: ${numbered}.`;
+  }
+  return `${base} Reply with a more specific title, or rerun /movie <title> or /show <title>.`;
+}
+
+function invalidSelectionPrompt(pending, selection) {
+  const options = candidateOptionsText(pending?.candidates || []);
+  if (options.length > 0) {
+    const numbered = options.map((option, index) => `${index + 1}. ${option}`).join('; ');
+    return `I only have ${options.length} candidate${options.length === 1 ? '' : 's'} here, so ${selection.index} isn't a valid selection. Reply with one of these: ${numbered}.`;
+  }
+  return `That number isn't a valid media selection. Reply with a more specific title, or rerun /movie <title> or /show <title>.`;
 }
 
 function mapResultToTemplate(result, noun, pending = null) {
@@ -281,7 +337,31 @@ async function handleTelegramMediaCommand(text, options = {}) {
     }
 
     const noun = pending.mediaType === 'show' ? 'Sonarr' : 'Radarr';
-    const canonical = mergeClarificationIntoCanonical(pending, clarification);
+    const selection = parseNumberedSelection(clarification, pending.candidates || []);
+    if (selection.kind === 'invalid') {
+      return finalize({
+        auditOutcome: 'pending_invalid_selection',
+        responseText: invalidSelectionPrompt(pending, selection)
+      });
+    }
+
+    const canonical = selection.kind === 'valid'
+      ? {
+          title: selection.candidate.title,
+          year: selection.candidate.year,
+          mediaType: pending.mediaType === 'show' ? 'show' : 'movie'
+        }
+      : mergeClarificationIntoCanonical(pending, clarification);
+
+    if (selection.kind !== 'valid' && canonicalEquals(canonical, pending.canonical || canonicalFromQuery(pending.originalQuery, pending.mediaType))) {
+      pending.noProgressCount = Number(pending.noProgressCount || 0) + 1;
+      pending.ts = now;
+      return finalize({
+        auditOutcome: 'pending_no_progress',
+        responseText: noProgressClarificationPrompt(pending)
+      });
+    }
+
     const requestText = canonicalQueryText(canonical, true);
     const executed = await executeMediaRequest({ runner, requestText, noun });
     if (!executed.ok) {

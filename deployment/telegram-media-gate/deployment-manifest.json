@@ -28,7 +28,7 @@
     {
       "source_path": "runtime/scripts/telegram-media-handler.mjs",
       "image_relative_path": "scripts/telegram-media-handler.mjs",
-      "sha256": "31bf92d01ff9c9ec9e3be18c7daff70fc40e627086e5a256015e7154a3c134ad"
+      "sha256": "7c37e25d27d40bb294c7e6953636b27584621622b9ed74e6af6952369f1ce8e4"
     },
     {
       "source_path": "runtime/scripts/telegram-media-invite.mjs",
@@ -53,7 +53,7 @@
     {
       "source_path": "runtime/scripts/media-mvp-resolve.mjs",
       "image_relative_path": "scripts/media-mvp-resolve.mjs",
-      "sha256": "67006583e15062fa89d01e7b68ebbe9f02b2e5ac077b022ba2406d0fcb4d62aa"
+      "sha256": "66662e6b4b9e652c803dc19ed0420437fcdff6d773a88b9c644a6bdc2eaf1ca0"
     },
     {
       "source_path": "runtime/config/telegram-media-commands.json",

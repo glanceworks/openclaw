@@ -1,0 +1,64 @@
+{
+  "schema_version": "1.0.0",
+  "source_commit": "ff2c9620d2d4105413f01cb421cac5eb6eaaccb2",
+  "parent_commit": "2168d504507edf6117a13f9b9aeef2ac88808bb2",
+  "source_commit_subject": "Fix media clarification no-progress handling",
+  "transfer": {
+    "bundle_ref": "refs/transfer/coordinator-ff2c962",
+    "bundle_sha256": "16bd3cc54bd6d1536f51fa39e97d091b69d6f8763547b2ed1c74c9b49c4076e4",
+    "manifest_sha256": "bc6c8b850310cf455db991c5babe0c630c20dc7370897be907296451a786ae8e",
+    "export_created_utc": "2026-07-15T23:13:06.040765Z",
+    "bundle_verified_complete": true,
+    "history_merged": false
+  },
+  "reason_for_refresh": [
+    "unique exact normalized title plus exact known year resolves directly",
+    "repeated known-year clarification is detected as no progress without rerunning lookup",
+    "ambiguous candidates are bounded and numbered",
+    "valid and invalid numbered selections remain deterministic and bounded"
+  ],
+  "files": [
+    {
+      "source_path": "scripts/media-mvp-resolve.mjs",
+      "deployment_path": "runtime/scripts/media-mvp-resolve.mjs",
+      "git_blob_sha1": "936ccb7ed12d02900f501d432b0b92e7f254fa49",
+      "old_sha256": "67006583e15062fa89d01e7b68ebbe9f02b2e5ac077b022ba2406d0fcb4d62aa",
+      "new_sha256": "66662e6b4b9e652c803dc19ed0420437fcdff6d773a88b9c644a6bdc2eaf1ca0",
+      "byte_size": 12638,
+      "git_mode": "100644"
+    },
+    {
+      "source_path": "scripts/telegram-media-handler.mjs",
+      "deployment_path": "runtime/scripts/telegram-media-handler.mjs",
+      "git_blob_sha1": "d905799d38f5e0f0c85ea117e5b7862ffd915778",
+      "old_sha256": "31bf92d01ff9c9ec9e3be18c7daff70fc40e627086e5a256015e7154a3c134ad",
+      "new_sha256": "7c37e25d27d40bb294c7e6953636b27584621622b9ed74e6af6952369f1ce8e4",
+      "byte_size": 18651,
+      "git_mode": "100644"
+    }
+  ],
+  "coordinator_test_reference_only": [
+    {
+      "source_path": "scripts/media-mvp-resolution-tests.mjs",
+      "git_blob_sha1": "bb2a03beaedd47efcda58406d492b7d31be9fac9",
+      "sha256": "212c80d76b5f36e2a0cadc95cc0d3b3fa8ba1ed628d06ed7747592fa5c023321",
+      "byte_size": 5415,
+      "copied_into_image_runtime": false
+    },
+    {
+      "source_path": "scripts/telegram-media-pending-tests.mjs",
+      "git_blob_sha1": "8b49b669e43c9401009098c77d7849473e4c4c7b",
+      "sha256": "da0dbc95ccd4b69ef15cfa66375838490696c9fde223fa355409ffec0cc93111",
+      "byte_size": 10676,
+      "copied_into_image_runtime": false
+    }
+  ],
+  "preserved_evidence": {
+    "base_image_pin": true,
+    "generated_bundle_path_and_hashes": true,
+    "entrypoint_and_explicit_command_contract": true,
+    "runtime_uid_gid_assumptions": true,
+    "six_unchanged_runtime_file_hashes": true,
+    "no_access_config_state_audit_compose_dockerfile_or_operator_change": true
+  }
+}

@@ -22,6 +22,7 @@ REGISTRY_EVIDENCE = DEPLOYMENT / "evidence/registry-openclaw-2026.5.4-20260713T1
 DOCKERFILE = DEPLOYMENT.parents[1] / "Dockerfile.playwright-runtime"
 COMPOSE = DEPLOYMENT.parents[1] / "docker-compose.yml"
 YEAR_FIX_PROVENANCE = DEPLOYMENT / "provenance/year-clarification-refresh-2168d50.json"
+NO_PROGRESS_PROVENANCE = DEPLOYMENT / "provenance/no-progress-refresh-ff2c962.json"
 RUNTIME_SMOKE = HERE / "runtime-media-clarification-smoke.mjs"
 RUNBOOK = DEPLOYMENT / "RUNBOOK.md"
 EXPECTED_IMAGE_ENTRYPOINT = (
@@ -233,25 +234,37 @@ class DeploymentFrameworkTests(unittest.TestCase):
 
     def test_runtime_hashes_match_layered_provenance(self):
         export = json.loads((DEPLOYMENT / "provenance/export-manifest.json").read_text())
-        refresh = json.loads(YEAR_FIX_PROVENANCE.read_text())
+        year_refresh = json.loads(YEAR_FIX_PROVENANCE.read_text())
+        no_progress = json.loads(NO_PROGRESS_PROVENANCE.read_text())
         baseline = {
             entry["original_repository_path"]: entry["sha256"]
             for entry in export["files"] if entry["classification"] == "runtime"
         }
         declared = dict(baseline)
-        refreshed_paths = set()
-        for entry in refresh["files"]:
+        year_paths = set()
+        for entry in year_refresh["files"]:
             self.assertEqual(baseline[entry["source_path"]], entry["old_sha256"])
             declared[entry["source_path"]] = entry["new_sha256"]
-            refreshed_paths.add(entry["source_path"])
+            year_paths.add(entry["source_path"])
+        latest_paths = set()
+        for entry in no_progress["files"]:
+            self.assertEqual(declared[entry["source_path"]], entry["old_sha256"])
+            declared[entry["source_path"]] = entry["new_sha256"]
+            latest_paths.add(entry["source_path"])
+            source = DEPLOYMENT / entry["deployment_path"]
+            self.assertEqual(sha(source.read_bytes()), entry["new_sha256"])
         self.assertEqual(len(declared), 8)
         self.assertEqual(
-            refreshed_paths,
+            year_paths,
             {
                 "scripts/telegram-media-handler.mjs",
                 "scripts/media-mvp-resolve.mjs",
                 "scripts/media-mvp-add-gated.mjs",
             },
+        )
+        self.assertEqual(
+            latest_paths,
+            {"scripts/telegram-media-handler.mjs", "scripts/media-mvp-resolve.mjs"},
         )
         changed_from_baseline = set()
         for rel, expected in declared.items():
@@ -259,21 +272,31 @@ class DeploymentFrameworkTests(unittest.TestCase):
             self.assertEqual(actual, expected)
             if actual != baseline[rel]:
                 changed_from_baseline.add(rel)
-        self.assertEqual(changed_from_baseline, refreshed_paths)
+        self.assertEqual(changed_from_baseline, year_paths)
         manifest_hashes = {
             entry["image_relative_path"]: entry["sha256"]
             for entry in load_manifest(MANIFEST)["runtime_files"]
         }
         self.assertEqual(manifest_hashes, declared)
-        self.assertEqual(refresh["source_commit"], "2168d504507edf6117a13f9b9aeef2ac88808bb2")
-        self.assertEqual(refresh["parent_commit"], "580007d45bd4e903d829d1f17ed61dd4341e0dcd")
+        self.assertEqual(no_progress["source_commit"], "ff2c9620d2d4105413f01cb421cac5eb6eaaccb2")
+        self.assertEqual(no_progress["parent_commit"], "2168d504507edf6117a13f9b9aeef2ac88808bb2")
+        self.assertEqual(no_progress["transfer"]["bundle_ref"], "refs/transfer/coordinator-ff2c962")
         self.assertEqual(
-            refresh["archive_sha256"],
-            "659a3b69e5b4bd05f5d8483d0789a8172bda7d162259eb982b6fb0daabcb292b",
+            no_progress["transfer"]["bundle_sha256"],
+            "16bd3cc54bd6d1536f51fa39e97d091b69d6f8763547b2ed1c74c9b49c4076e4",
         )
-        self.assertFalse(refresh["exact_historical_lookup_error_reproduced"])
-        self.assertFalse(refresh["test_only_provenance"]["copied_into_image_runtime"])
-        self.assertFalse((DEPLOYMENT / "runtime/scripts/telegram-media-pending-tests.mjs").exists())
+        self.assertTrue(no_progress["transfer"]["bundle_verified_complete"])
+        self.assertFalse(no_progress["transfer"]["history_merged"])
+        self.assertEqual(
+            {entry["source_path"]: entry["git_blob_sha1"] for entry in no_progress["files"]},
+            {
+                "scripts/media-mvp-resolve.mjs": "936ccb7ed12d02900f501d432b0b92e7f254fa49",
+                "scripts/telegram-media-handler.mjs": "d905799d38f5e0f0c85ea117e5b7862ffd915778",
+            },
+        )
+        for entry in no_progress["coordinator_test_reference_only"]:
+            self.assertFalse(entry["copied_into_image_runtime"])
+            self.assertFalse((DEPLOYMENT / "runtime" / entry["source_path"]).exists())
 
     def test_year_clarification_runtime_contract_fixtures_are_offline(self):
         handler = (DEPLOYMENT / "runtime/scripts/telegram-media-handler.mjs").read_text()
@@ -302,6 +325,21 @@ class DeploymentFrameworkTests(unittest.TestCase):
         self.assertIn("failure: safeFailureMeta('library', library)", resolver)
         self.assertIn("text: ''", resolver)
         self.assertIn("failure: resolved.failure || null", gated)
+        for snippet in (
+            "function exactCanonicalCandidates(candidates, parsed)",
+            "const strong = exact.length === 1 ? [exact[0]] : strongCandidates(candidates)",
+        ):
+            self.assertIn(snippet, resolver)
+        for snippet in (
+            "function candidateOptionObjects(candidates)",
+            "function parseNumberedSelection(text, candidates)",
+            "function canonicalEquals(a, b)",
+            "function noProgressClarificationPrompt(pending)",
+            "function invalidSelectionPrompt(pending, selection)",
+            "auditOutcome: 'pending_no_progress'",
+            "auditOutcome: 'pending_invalid_selection'",
+        ):
+            self.assertIn(snippet, handler)
 
         data_root = self.root / "year-clarification-data"
         state_path = data_root / "state/pending.json"
@@ -358,8 +396,9 @@ class DeploymentFrameworkTests(unittest.TestCase):
         self.assertEqual(first, pending["canonical"])
         self.assertEqual(second, first)
         self.assertEqual(query(second), "Dragons: Race to the Edge 2015 show")
-        stub_runner(query(second))
-        self.assertEqual(runner_inputs[-1], "Dragons: Race to the Edge 2015 show")
+        # The imported handler classifies the identical canonical value as no
+        # progress and does not rerun the resolver.
+        self.assertEqual(runner_inputs, [])
 
         self.assertEqual(
             canonical("Dragons: Race to the Edge 2015", "show"),
@@ -408,11 +447,22 @@ class DeploymentFrameworkTests(unittest.TestCase):
         self.assertIn("new URL('../runtime/scripts/', import.meta.url)", source)
         self.assertIn("telegram-media-gate.mjs", source)
         self.assertIn("telegram-media-handler.mjs", source)
-        self.assertEqual(source.count("await import("), 2)
+        self.assertIn("media-mvp-resolve.mjs", source)
+        self.assertEqual(source.count("await import("), 3)
         for scenario in (
             "/show Dragons: Race to the Edge (2015)",
             "/show Dragons: Race to the Edge 2015",
+            "/show Dragons 2015",
             "await mediaAccess('2015')",
+            "await mediaAccess('9')",
+            "await mediaAccess('2')",
+            "pending_no_progress",
+            "pending_invalid_selection",
+            "Still no change",
+            "isn't a valid selection",
+            "resolveRequest(query)",
+            "summary.resolutionState, 'resolved'",
+            "summary.matchedTitle, 'Dragons: Race to the Edge (2015)'",
             "await mediaAccess('Race to the Edge 2015')",
             "/movie strange harvest",
             "await mediaAccess('2026')",
@@ -452,6 +502,12 @@ class DeploymentFrameworkTests(unittest.TestCase):
             self.assertIn(scenario, source)
         self.assertIn("fs.mkdtempSync", source)
         self.assertIn("path.join(dataRoot, 'config', 'telegram-media-access.json')", source)
+        self.assertIn("path.join(dataRoot, 'config', 'media-request-mvp.json')", source)
+        self.assertIn("fixture-sonarr", source)
+        self.assertIn("fixture-radarr", source)
+        self.assertIn("the resolver smoke must not exercise media add operations", source)
+        self.assertNotIn("media-mvp-add-gated.mjs", source)
+        self.assertNotIn("method: 'POST'", source)
         self.assertIn("fullAccessUserIds: [FULL_ACCESS_USER_ID]", source)
         self.assertIn("mediaRequestUserIds: [MEDIA_ONLY_USER_ID]", source)
         fixture_ids = dict(re.findall(
@@ -490,6 +546,10 @@ class DeploymentFrameworkTests(unittest.TestCase):
             "assert.equal(typeof numericStringLog.failure.status, 'number')",
             "assert.equal(invalidStatusLog.failure.status, null)",
             "assert.equal(timeoutLog.failure.status, 0)",
+            "assert.equal(runnerInputs.length, beforeNoProgressCount)",
+            "assert.equal(readLogs().at(-1).outcome, 'pending_no_progress')",
+            "assert.equal(readLogs().at(-1).outcome, 'pending_invalid_selection')",
+            "assert.equal(resolverFetches.length, 4)",
             "assertNoSensitiveSurface(log.failure, 'failure metadata')",
             "assertNoSensitiveSurface(result.responseText, 'user-facing reply')",
             "assertNoSensitiveSurface(log, 'audit log')",
@@ -509,7 +569,7 @@ class DeploymentFrameworkTests(unittest.TestCase):
             self.assertIn(assertion, source)
         self.assertNotIn("JSON.stringify({ result, log })", source)
         self.assertIn("fs.rmSync(dataRoot, { recursive: true, force: true })", source)
-        self.assertIn("globalThis.fetch = async () =>", source)
+        self.assertIn("globalThis.fetch = async (url, options = {}) =>", source)
         for forbidden in (
             "node:child_process", "docker ", "docker-compose", "node:http",
             "node:https", "node:net", "node:tls", "/home/deploy", "/app/dist",
