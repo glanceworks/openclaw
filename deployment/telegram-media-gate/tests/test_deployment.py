@@ -23,6 +23,7 @@ DOCKERFILE = DEPLOYMENT.parents[1] / "Dockerfile.playwright-runtime"
 COMPOSE = DEPLOYMENT.parents[1] / "docker-compose.yml"
 YEAR_FIX_PROVENANCE = DEPLOYMENT / "provenance/year-clarification-refresh-2168d50.json"
 NO_PROGRESS_PROVENANCE = DEPLOYMENT / "provenance/no-progress-refresh-ff2c962.json"
+SONARR_SHAPE_PROVENANCE = DEPLOYMENT / "provenance/sonarr-parent-series-refresh-65d27aa.json"
 RUNTIME_SMOKE = HERE / "runtime-media-clarification-smoke.mjs"
 RUNBOOK = DEPLOYMENT / "RUNBOOK.md"
 EXPECTED_IMAGE_ENTRYPOINT = (
@@ -236,6 +237,7 @@ class DeploymentFrameworkTests(unittest.TestCase):
         export = json.loads((DEPLOYMENT / "provenance/export-manifest.json").read_text())
         year_refresh = json.loads(YEAR_FIX_PROVENANCE.read_text())
         no_progress = json.loads(NO_PROGRESS_PROVENANCE.read_text())
+        sonarr_shape = json.loads(SONARR_SHAPE_PROVENANCE.read_text())
         baseline = {
             entry["original_repository_path"]: entry["sha256"]
             for entry in export["files"] if entry["classification"] == "runtime"
@@ -246,26 +248,28 @@ class DeploymentFrameworkTests(unittest.TestCase):
             self.assertEqual(baseline[entry["source_path"]], entry["old_sha256"])
             declared[entry["source_path"]] = entry["new_sha256"]
             year_paths.add(entry["source_path"])
-        latest_paths = set()
+        no_progress_paths = set()
         for entry in no_progress["files"]:
             self.assertEqual(declared[entry["source_path"]], entry["old_sha256"])
             declared[entry["source_path"]] = entry["new_sha256"]
-            latest_paths.add(entry["source_path"])
+            no_progress_paths.add(entry["source_path"])
+        sonarr_shape_paths = set()
+        for entry in sonarr_shape["files"]:
+            self.assertEqual(declared[entry["source_path"]], entry["old_sha256"])
+            declared[entry["source_path"]] = entry["new_sha256"]
+            sonarr_shape_paths.add(entry["source_path"])
             source = DEPLOYMENT / entry["deployment_path"]
             self.assertEqual(sha(source.read_bytes()), entry["new_sha256"])
         self.assertEqual(len(declared), 8)
-        self.assertEqual(
-            year_paths,
-            {
-                "scripts/telegram-media-handler.mjs",
-                "scripts/media-mvp-resolve.mjs",
-                "scripts/media-mvp-add-gated.mjs",
-            },
-        )
-        self.assertEqual(
-            latest_paths,
-            {"scripts/telegram-media-handler.mjs", "scripts/media-mvp-resolve.mjs"},
-        )
+        self.assertEqual(year_paths, {
+            "scripts/telegram-media-handler.mjs",
+            "scripts/media-mvp-resolve.mjs",
+            "scripts/media-mvp-add-gated.mjs",
+        })
+        self.assertEqual(no_progress_paths, {
+            "scripts/telegram-media-handler.mjs", "scripts/media-mvp-resolve.mjs",
+        })
+        self.assertEqual(sonarr_shape_paths, {"scripts/media-mvp-resolve.mjs"})
         changed_from_baseline = set()
         for rel, expected in declared.items():
             actual = sha((DEPLOYMENT / "runtime" / rel).read_bytes())
@@ -297,6 +301,18 @@ class DeploymentFrameworkTests(unittest.TestCase):
         for entry in no_progress["coordinator_test_reference_only"]:
             self.assertFalse(entry["copied_into_image_runtime"])
             self.assertFalse((DEPLOYMENT / "runtime" / entry["source_path"]).exists())
+        self.assertEqual(sonarr_shape["source_commit"], "65d27aaca77dcc58e5ed36e869404267ac2c299b")
+        self.assertEqual(sonarr_shape["parent_commit"], "ff2c9620d2d4105413f01cb421cac5eb6eaaccb2")
+        self.assertEqual(sonarr_shape["transfer"]["bundle_ref"], "refs/transfer/coordinator-65d27aa")
+        self.assertEqual(sonarr_shape["transfer"]["bundle_sha256"], "df778fd43f4bfb5ebae05409934defcf209716b398c2b9ed54126d3c2621c5b0")
+        self.assertTrue(sonarr_shape["transfer"]["bundle_verified_complete"])
+        self.assertFalse(sonarr_shape["transfer"]["history_merged"])
+        self.assertEqual(sonarr_shape["files"][0]["git_blob_sha1"], "ca8032a0aeee6d7e13fd61fe1bdce240cd943fb7")
+        reference = sonarr_shape["coordinator_test_reference_only"]
+        self.assertEqual(reference["git_blob_sha1"], "da398ce4d94fe6b369f798442b66c4259b74a600")
+        self.assertFalse(reference["copied_into_image_runtime"])
+        self.assertFalse((DEPLOYMENT / "runtime" / reference["source_path"]).exists())
+        self.assertFalse((HERE / "media-mvp-resolution-tests.mjs").exists())
 
     def test_year_clarification_runtime_contract_fixtures_are_offline(self):
         handler = (DEPLOYMENT / "runtime/scripts/telegram-media-handler.mjs").read_text()
@@ -326,7 +342,13 @@ class DeploymentFrameworkTests(unittest.TestCase):
         self.assertIn("text: ''", resolver)
         self.assertIn("failure: resolved.failure || null", gated)
         for snippet in (
-            "function exactCanonicalCandidates(candidates, parsed)",
+            "function seriesCanonicalAliases(candidate)",
+            "function canonicalCandidateTitles(candidate, type)",
+            "function exactCanonicalMatch(candidate, parsed, type)",
+            "function exactCanonicalCandidates(candidates, parsed, type)",
+            "Number(candidate.tvdbId) === 261202",
+            "hasSeasonRange(candidate, 3, 8)",
+            "score = Math.min(score, 74)",
             "const strong = exact.length === 1 ? [exact[0]] : strongCandidates(candidates)",
         ):
             self.assertIn(snippet, resolver)
@@ -463,6 +485,15 @@ class DeploymentFrameworkTests(unittest.TestCase):
             "resolveRequest(query)",
             "summary.resolutionState, 'resolved'",
             "summary.matchedTitle, 'Dragons: Race to the Edge (2015)'",
+            "Dragons: Race to the Edge (2012) show",
+            "weakYearSummary.resolutionState, 'low_confidence'",
+            "weakYearSummary.matchedTitle, 'Dragons (2012)'",
+            "resolved.candidate.item.title, 'Dragons'",
+            "resolved.candidate.item.year, 2012",
+            "resolved.candidate.item.tvdbId, 261202",
+            "dragonsRealSonarrShape",
+            "titleSlug: 'dragons'",
+            "[0, 1, 2, 3, 4, 5, 6, 7, 8]",
             "await mediaAccess('Race to the Edge 2015')",
             "/movie strange harvest",
             "await mediaAccess('2026')",
@@ -549,7 +580,7 @@ class DeploymentFrameworkTests(unittest.TestCase):
             "assert.equal(runnerInputs.length, beforeNoProgressCount)",
             "assert.equal(readLogs().at(-1).outcome, 'pending_no_progress')",
             "assert.equal(readLogs().at(-1).outcome, 'pending_invalid_selection')",
-            "assert.equal(resolverFetches.length, 4)",
+            "assert.equal(resolverFetches.length, 5)",
             "assertNoSensitiveSurface(log.failure, 'failure metadata')",
             "assertNoSensitiveSurface(result.responseText, 'user-facing reply')",
             "assertNoSensitiveSurface(log, 'audit log')",

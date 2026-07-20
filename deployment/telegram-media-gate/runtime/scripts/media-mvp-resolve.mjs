@@ -124,11 +124,58 @@ async function librarySeries(sonarr) {
   return fetchJson(`${sonarr.baseUrl}/api/v3/series`, sonarr.apiKey);
 }
 
+function candidateYear(candidate, type) {
+  return type === 'movie'
+    ? candidate.year
+    : candidate.year || (candidate.firstAired ? Number(String(candidate.firstAired).slice(0,4)) : null);
+}
+
+function hasSeasonRange(candidate, first, last) {
+  if (!Array.isArray(candidate.seasons)) return false;
+  const seasons = new Set(candidate.seasons.map(season => Number(season?.seasonNumber)).filter(Number.isFinite));
+  for (let season = first; season <= last; season += 1) {
+    if (!seasons.has(season)) return false;
+  }
+  return true;
+}
+
+function seriesCanonicalAliases(candidate) {
+  const aliases = [];
+  // Sonarr returns DreamWorks Dragons: Race to the Edge as seasons 3-8 of
+  // the parent Dragons series, not as a standalone lookup result. Keep this
+  // as a narrow real-shape alias rather than a broad fuzzy-title shortcut.
+  if (
+    Number(candidate.tvdbId) === 261202
+    && candidate.titleSlug === 'dragons'
+    && normalizeTitle(candidate.title) === 'dragons'
+    && Number(candidate.year) === 2012
+    && hasSeasonRange(candidate, 3, 8)
+  ) {
+    aliases.push({ title: 'Dragons: Race to the Edge', year: 2015 });
+  }
+  return aliases;
+}
+
+function canonicalCandidateTitles(candidate, type) {
+  const canonical = [{ title: candidate.title || candidate.name || '', year: candidateYear(candidate, type) || null }];
+  if (type === 'series') canonical.push(...seriesCanonicalAliases(candidate));
+  return canonical;
+}
+
+function exactCanonicalMatch(candidate, parsed, type) {
+  return canonicalCandidateTitles(candidate, type).find(canonical => {
+    if (normalizeTitle(canonical.title) !== parsed.normalizedTitle) return false;
+    if (parsed.year && Number(canonical.year) !== Number(parsed.year)) return false;
+    return true;
+  }) || null;
+}
+
 function scoreCandidate(candidate, parsed, type) {
-  const title = candidate.title || candidate.name || '';
+  const exactCanonical = exactCanonicalMatch(candidate, parsed, type);
+  const title = exactCanonical?.title || candidate.title || candidate.name || '';
   const norm = normalizeTitle(title);
   let score = 0;
-  if (norm === parsed.normalizedTitle) score += 100;
+  if (exactCanonical || norm === parsed.normalizedTitle) score += 100;
   else if (norm.includes(parsed.normalizedTitle) || parsed.normalizedTitle.includes(norm)) score += 70;
   else {
     const pWords = new Set(parsed.normalizedTitle.split(' ').filter(Boolean));
@@ -137,10 +184,13 @@ function scoreCandidate(candidate, parsed, type) {
     for (const w of pWords) if (cWords.has(w)) overlap += 1;
     score += overlap * 10;
   }
-  const year = type === 'movie' ? candidate.year : candidate.year || (candidate.firstAired ? Number(String(candidate.firstAired).slice(0,4)) : null);
+  const year = exactCanonical?.year || candidateYear(candidate, type);
   if (parsed.year && year) {
     if (Number(year) === parsed.year) score += 40;
     else score -= 25;
+  }
+  if (!exactCanonical && type === 'series' && parsed.year && Number(year) === parsed.year && norm !== parsed.normalizedTitle && parsed.normalizedTitle.includes(norm)) {
+    score = Math.min(score, 74);
   }
   if (parsed.typeHint === type) score += 5;
   return { score, year: year || null, title };
@@ -159,12 +209,8 @@ function chooseCandidates(data, parsed, type) {
   return scored;
 }
 
-function exactCanonicalCandidates(candidates, parsed) {
-  return candidates.filter(candidate => {
-    if (normalizeTitle(candidate.title) !== parsed.normalizedTitle) return false;
-    if (parsed.year && Number(candidate.year) !== Number(parsed.year)) return false;
-    return true;
-  });
+function exactCanonicalCandidates(candidates, parsed, type) {
+  return candidates.filter(candidate => exactCanonicalMatch(candidate.item, parsed, type));
 }
 
 function extractIds(item, type) {
@@ -208,7 +254,7 @@ async function resolveForType(type, parsed, svcCfg) {
   }
   const candidates = chooseCandidates(lookup.data, parsed, type);
   if (candidates.length === 0) return { type, state: 'no_result' };
-  const exact = exactCanonicalCandidates(candidates, parsed);
+  const exact = exactCanonicalCandidates(candidates, parsed, type);
   if (exact.length === 1) {
     candidates.splice(0, candidates.length, exact[0], ...candidates.filter(candidate => candidate !== exact[0]));
   }

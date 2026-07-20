@@ -45,11 +45,33 @@ const dragonsCandidates = [
   { title: 'Dragons', year: 2012, type: 'series' },
   { title: 'Dragons: Race to the Edge', year: 2015, type: 'series' }
 ];
+const dragonsRealSonarrShape = [
+  {
+    title: 'Dragons', year: 2012, firstAired: '2012-08-07T00:00:00Z',
+    seriesType: 'standard', tvdbId: 261202, tmdbId: 44305,
+    imdbId: 'tt2325846', titleSlug: 'dragons',
+    seasons: [0, 1, 2, 3, 4, 5, 6, 7, 8]
+      .map(seasonNumber => ({ seasonNumber, monitored: seasonNumber !== 0 }))
+  },
+  {
+    title: 'Inspector Gadget (2015)', year: 2015, firstAired: '2015-01-05T00:00:00Z',
+    tvdbId: 290688, titleSlug: 'inspector-gadget-2015', seriesType: 'standard'
+  },
+  {
+    title: 'Chaos Dragon', year: 2015, firstAired: '2015-07-02T00:00:00Z',
+    tvdbId: 296764, titleSlug: 'chaos-dragon', seriesType: 'standard'
+  },
+  {
+    title: 'Dragons: The Nine Realms', year: 2021, firstAired: '2021-12-23T00:00:00Z',
+    tvdbId: 411408, titleSlug: 'dragons-the-nine-realms', seriesType: 'standard'
+  },
+  {
+    title: 'Dragons: Rescue Riders', year: 2019, firstAired: '2019-09-27T00:00:00Z',
+    tvdbId: 370115, titleSlug: 'dragons-rescue-riders', seriesType: 'standard'
+  }
+];
 const sonarrLookup = {
-  'dragons race to the edge': [
-    { title: 'Dragons', year: 2012, firstAired: '2012-08-07', tvdbId: 261202 },
-    { title: 'Dragons: Race to the Edge', year: 2015, firstAired: '2015-06-26', tvdbId: 293117 }
-  ]
+  'dragons race to the edge': dragonsRealSonarrShape
 };
 function normalizeLookupTerm(value) {
   return String(value || '').toLowerCase().replace(/&/g, 'and')
@@ -259,9 +281,18 @@ try {
     assert.equal(summary.targetService, 'sonarr');
     assert.equal(summary.resolutionState, 'resolved');
     assert.equal(summary.matchedTitle, 'Dragons: Race to the Edge (2015)');
-    assert.notEqual(summary.matchedTitle, 'Dragons (2012)');
+    assert.equal(resolved.candidate.item.title, 'Dragons');
+    assert.equal(resolved.candidate.item.year, 2012);
+    assert.equal(resolved.candidate.item.tvdbId, 261202);
   }
-  assert.equal(resolverFetches.length, 4);
+  const weakYearResult = await resolveRequest('Dragons: Race to the Edge (2012) show');
+  const weakYearSummary = summarize(weakYearResult);
+  assert.equal(weakYearSummary.classification, 'series');
+  assert.equal(weakYearSummary.targetService, 'sonarr');
+  assert.equal(weakYearSummary.resolutionState, 'low_confidence');
+  assert.equal(weakYearSummary.matchedTitle, 'Dragons (2012)');
+  assert.equal(weakYearResult.candidate.item.title, 'Dragons');
+  assert.equal(resolverFetches.length, 5);
   assert.ok(resolverFetches.every(({ hostname, method }) =>
     hostname === 'fixture-sonarr' && method === 'GET'));
 

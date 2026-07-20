@@ -1,0 +1,47 @@
+{
+  "schema_version": "1.0.0",
+  "source_commit": "65d27aaca77dcc58e5ed36e869404267ac2c299b",
+  "parent_commit": "ff2c9620d2d4105413f01cb421cac5eb6eaaccb2",
+  "source_commit_subject": "Fix Sonarr Dragons Race resolver shape",
+  "transfer": {
+    "bundle_ref": "refs/transfer/coordinator-65d27aa",
+    "bundle_sha256": "df778fd43f4bfb5ebae05409934defcf209716b398c2b9ed54126d3c2621c5b0",
+    "source_export_sha256": "f6d895e7cf82fcf1c6c858c347b7b93d15e27f7de95ae7aa3fd31f83ceafba85",
+    "manifest_sha256": "fe160554974ad629aa4c70eb45183383358c0b5ac6e1d515a42b17ca391fcc58",
+    "commit_time": "2026-07-17T13:19:19-06:00",
+    "bundle_verified_complete": true,
+    "history_merged": false
+  },
+  "reason_for_refresh": [
+    "model the sanitized real Sonarr parent-series response for Dragons",
+    "resolve Dragons: Race to the Edge (2015) through the verified parent Dragons series shape",
+    "keep Dragons: Race to the Edge (2012) below the resolution threshold"
+  ],
+  "files": [
+    {
+      "source_path": "scripts/media-mvp-resolve.mjs",
+      "deployment_path": "runtime/scripts/media-mvp-resolve.mjs",
+      "git_blob_sha1": "ca8032a0aeee6d7e13fd61fe1bdce240cd943fb7",
+      "old_sha256": "66662e6b4b9e652c803dc19ed0420437fcdff6d773a88b9c644a6bdc2eaf1ca0",
+      "new_sha256": "c7fe377c263035917e51294042d963825da8026a14dcaab8eb00d45c3dea49f9",
+      "byte_size": 14509,
+      "git_mode": "100644"
+    }
+  ],
+  "coordinator_test_reference_only": {
+    "source_path": "scripts/media-mvp-resolution-tests.mjs",
+    "git_blob_sha1": "da398ce4d94fe6b369f798442b66c4259b74a600",
+    "sha256": "3d84ded68399151d48f8d0cd3c57d29a896f4a2539f42ef0cf99a43093373dc6",
+    "byte_size": 6436,
+    "copied_into_image_runtime": false,
+    "use": "scenario reference only; deployment smoke is adapted to the immutable deployment layout"
+  },
+  "preserved_evidence": {
+    "seven_unchanged_runtime_file_hashes": true,
+    "generated_bundle_path_and_hashes": true,
+    "base_image_pin": true,
+    "entrypoint_and_explicit_command_contract": true,
+    "runtime_uid_gid_assumptions": true,
+    "no_compose_dockerfile_access_config_state_audit_or_operator_change": true
+  }
+}

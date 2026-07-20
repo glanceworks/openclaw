@@ -53,7 +53,7 @@
     {
       "source_path": "runtime/scripts/media-mvp-resolve.mjs",
       "image_relative_path": "scripts/media-mvp-resolve.mjs",
-      "sha256": "66662e6b4b9e652c803dc19ed0420437fcdff6d773a88b9c644a6bdc2eaf1ca0"
+      "sha256": "c7fe377c263035917e51294042d963825da8026a14dcaab8eb00d45c3dea49f9"
     },
     {
       "source_path": "runtime/config/telegram-media-commands.json",
