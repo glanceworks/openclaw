@@ -28,7 +28,7 @@
     {
       "source_path": "runtime/scripts/telegram-media-handler.mjs",
       "image_relative_path": "scripts/telegram-media-handler.mjs",
-      "sha256": "7c37e25d27d40bb294c7e6953636b27584621622b9ed74e6af6952369f1ce8e4"
+      "sha256": "a186a24f9cbe4c1c8fe55bcc6f0f82f88d17bef61f4d99eaea4938d06a7b8395"
     },
     {
       "source_path": "runtime/scripts/telegram-media-invite.mjs",

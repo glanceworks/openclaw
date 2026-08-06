@@ -1,0 +1,47 @@
+{
+  "schema_version": "1.0.0",
+  "source_commit": "07b78a0cf2ef09cf5a39222d32492b2e542fbd3f",
+  "parent_commit": "bf0dab97d37ae36661fa66d0a531b8f39053e00b",
+  "source_commit_subject": "Fix media known-year clarification copy",
+  "transfer": {
+    "bundle_ref": "refs/transfer/07b78a0",
+    "bundle_sha256": "3ceee57f3c9f015635caf4a060f433054fd0c23439d607480e5d28f9de46055b",
+    "source_export_sha256": "7d4d810807c9ea3b7983900a12915b009d8d825e175f802b799d2386cccd5e05",
+    "manifest_sha256": "3814b459f886e4ac3a11b1605af2fe6671407b8c0ad2a7ce271533f9a3038a07",
+    "bundle_is_thin": true,
+    "bundle_prerequisite": "bf0dab97d37ae36661fa66d0a531b8f39053e00b",
+    "bundle_verified_complete": false,
+    "artifact_checksums_verified": true,
+    "source_export_manifest_verified": true,
+    "history_merged": false
+  },
+  "reason_for_refresh": [
+    "avoid asking for a known year again when no actionable numbered candidates are available"
+  ],
+  "files": [
+    {
+      "source_path": "scripts/telegram-media-handler.mjs",
+      "deployment_path": "runtime/scripts/telegram-media-handler.mjs",
+      "git_blob_sha1": "f122108da74cb349b626c612babe0e34a7660cda",
+      "old_sha256": "7c37e25d27d40bb294c7e6953636b27584621622b9ed74e6af6952369f1ce8e4",
+      "new_sha256": "a186a24f9cbe4c1c8fe55bcc6f0f82f88d17bef61f4d99eaea4938d06a7b8395",
+      "byte_size": 19663,
+      "git_mode": "100644"
+    }
+  ],
+  "coordinator_test_reference_only": {
+    "source_path": "scripts/telegram-media-pending-tests.mjs",
+    "git_blob_sha1": "c5caf2e420d3291f7dcbf23553ce36edf60fab28",
+    "sha256": "7d3180c15d6b9014e1eb01a1a6711b7c7062a4ed8c066bed4c6db59878bcaaeb",
+    "byte_size": 14533,
+    "git_mode": "100644",
+    "copied_into_image_runtime": false,
+    "use": "offline scenario reference only; mounted read-only for source and candidate validation"
+  },
+  "constraints": [
+    "No title-specific aliases",
+    "No resolver scoring changes",
+    "No rollback tagging in build-only run",
+    "No activation in build-only run"
+  ]
+}

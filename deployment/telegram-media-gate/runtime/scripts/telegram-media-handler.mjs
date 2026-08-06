@@ -223,6 +223,22 @@ function noProgressClarificationPrompt(pending) {
   return `${base} Reply with a more specific title, or rerun /movie <title> or /show <title>.`;
 }
 
+function hasActionableNumberedCandidates(candidates) {
+  return candidateOptionsText(candidates || []).length > 0;
+}
+
+function knownYearStillUnclearPrompt(canonical, noun) {
+  const year = Number(canonical?.year);
+  const isShow = canonical?.mediaType === 'show';
+  const service = noun || (isShow ? 'Sonarr' : 'Radarr');
+  const mediaNoun = isShow ? 'series' : 'movie';
+  const retryCommand = isShow ? '/show <exact series title>' : '/movie <exact movie title>';
+  const alternate = isShow
+    ? 'If this is a film or TV movie, try /movie instead.'
+    : 'If this is a series, try /show instead.';
+  return `I have ${year}, but ${service} still can’t confidently match that ${mediaNoun} title. Retry with ${retryCommand}. ${alternate}`;
+}
+
 function invalidSelectionPrompt(pending, selection) {
   const options = candidateOptionsText(pending?.candidates || []);
   if (options.length > 0) {
@@ -381,13 +397,17 @@ async function handleTelegramMediaCommand(text, options = {}) {
         result,
         clarificationText: clarification
       }));
+      const candidateSource = result.candidates || pending.candidates || [];
+      const hasKnownYearWithoutOptions = canonical.year && !hasActionableNumberedCandidates(candidateSource);
       return finalize({
         auditOutcome: result.resolverState,
-        responseText: mapResultToTemplate(result, noun, {
-          originalQuery: canonicalQueryText(canonical),
-          canonical,
-          candidates: result.candidates || pending.candidates || []
-        })
+        responseText: hasKnownYearWithoutOptions
+          ? knownYearStillUnclearPrompt(canonical, noun)
+          : mapResultToTemplate(result, noun, {
+              originalQuery: canonicalQueryText(canonical),
+              canonical,
+              candidates: candidateSource
+            })
       });
     }
 

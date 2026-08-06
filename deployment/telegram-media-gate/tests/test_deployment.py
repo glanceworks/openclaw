@@ -24,6 +24,7 @@ COMPOSE = DEPLOYMENT.parents[1] / "docker-compose.yml"
 YEAR_FIX_PROVENANCE = DEPLOYMENT / "provenance/year-clarification-refresh-2168d50.json"
 NO_PROGRESS_PROVENANCE = DEPLOYMENT / "provenance/no-progress-refresh-ff2c962.json"
 SONARR_SHAPE_PROVENANCE = DEPLOYMENT / "provenance/sonarr-parent-series-refresh-65d27aa.json"
+KNOWN_YEAR_COPY_PROVENANCE = DEPLOYMENT / "provenance/known-year-clarification-copy-07b78a0.json"
 RUNTIME_SMOKE = HERE / "runtime-media-clarification-smoke.mjs"
 RUNBOOK = DEPLOYMENT / "RUNBOOK.md"
 EXPECTED_IMAGE_ENTRYPOINT = (
@@ -238,6 +239,7 @@ class DeploymentFrameworkTests(unittest.TestCase):
         year_refresh = json.loads(YEAR_FIX_PROVENANCE.read_text())
         no_progress = json.loads(NO_PROGRESS_PROVENANCE.read_text())
         sonarr_shape = json.loads(SONARR_SHAPE_PROVENANCE.read_text())
+        known_year_copy = json.loads(KNOWN_YEAR_COPY_PROVENANCE.read_text())
         baseline = {
             entry["original_repository_path"]: entry["sha256"]
             for entry in export["files"] if entry["classification"] == "runtime"
@@ -260,6 +262,13 @@ class DeploymentFrameworkTests(unittest.TestCase):
             sonarr_shape_paths.add(entry["source_path"])
             source = DEPLOYMENT / entry["deployment_path"]
             self.assertEqual(sha(source.read_bytes()), entry["new_sha256"])
+        known_year_copy_paths = set()
+        for entry in known_year_copy["files"]:
+            self.assertEqual(declared[entry["source_path"]], entry["old_sha256"])
+            declared[entry["source_path"]] = entry["new_sha256"]
+            known_year_copy_paths.add(entry["source_path"])
+            source = DEPLOYMENT / entry["deployment_path"]
+            self.assertEqual(sha(source.read_bytes()), entry["new_sha256"])
         self.assertEqual(len(declared), 8)
         self.assertEqual(year_paths, {
             "scripts/telegram-media-handler.mjs",
@@ -270,6 +279,7 @@ class DeploymentFrameworkTests(unittest.TestCase):
             "scripts/telegram-media-handler.mjs", "scripts/media-mvp-resolve.mjs",
         })
         self.assertEqual(sonarr_shape_paths, {"scripts/media-mvp-resolve.mjs"})
+        self.assertEqual(known_year_copy_paths, {"scripts/telegram-media-handler.mjs"})
         changed_from_baseline = set()
         for rel, expected in declared.items():
             actual = sha((DEPLOYMENT / "runtime" / rel).read_bytes())
@@ -313,6 +323,19 @@ class DeploymentFrameworkTests(unittest.TestCase):
         self.assertFalse(reference["copied_into_image_runtime"])
         self.assertFalse((DEPLOYMENT / "runtime" / reference["source_path"]).exists())
         self.assertFalse((HERE / "media-mvp-resolution-tests.mjs").exists())
+        self.assertEqual(known_year_copy["source_commit"], "07b78a0cf2ef09cf5a39222d32492b2e542fbd3f")
+        self.assertEqual(known_year_copy["parent_commit"], "bf0dab97d37ae36661fa66d0a531b8f39053e00b")
+        self.assertEqual(known_year_copy["transfer"]["bundle_ref"], "refs/transfer/07b78a0")
+        self.assertEqual(known_year_copy["transfer"]["bundle_sha256"], "3ceee57f3c9f015635caf4a060f433054fd0c23439d607480e5d28f9de46055b")
+        self.assertFalse(known_year_copy["transfer"]["bundle_verified_complete"])
+        self.assertTrue(known_year_copy["transfer"]["artifact_checksums_verified"])
+        self.assertTrue(known_year_copy["transfer"]["source_export_manifest_verified"])
+        self.assertFalse(known_year_copy["transfer"]["history_merged"])
+        self.assertEqual(known_year_copy["files"][0]["git_blob_sha1"], "f122108da74cb349b626c612babe0e34a7660cda")
+        reference = known_year_copy["coordinator_test_reference_only"]
+        self.assertEqual(reference["git_blob_sha1"], "c5caf2e420d3291f7dcbf23553ce36edf60fab28")
+        self.assertFalse(reference["copied_into_image_runtime"])
+        self.assertFalse((DEPLOYMENT / "runtime" / reference["source_path"]).exists())
 
     def test_year_clarification_runtime_contract_fixtures_are_offline(self):
         handler = (DEPLOYMENT / "runtime/scripts/telegram-media-handler.mjs").read_text()
