@@ -14,10 +14,19 @@ export type BookJob = {
   updated_at: string;
 };
 
+export type SelectedEdition = {
+  id: number;
+  title: string;
+  author: string;
+  year?: string;
+  series?: string;
+};
+
 export type BookRequest = {
   id: string;
   title: string;
   author: string;
+  selected_edition: SelectedEdition | null;
   status: string;
   status_label: string;
   created_at: string;
@@ -66,7 +75,12 @@ export type RequestBinding = {
   createdAt: number;
 };
 
-export type CallbackAction = "select_release" | "authorize" | "select_nzb" | "cancel";
+export type CallbackAction =
+  | "acquire_release"
+  | "select_release"
+  | "authorize"
+  | "select_nzb"
+  | "cancel";
 
 export type CallbackIntent = {
   token: string;

@@ -30,6 +30,7 @@ function request(cancelAllowed: boolean): BookRequest {
     id: "11111111-1111-4111-8111-111111111111",
     title: "Safe Book",
     author: "Safe Author",
+    selected_edition: null,
     status: "waiting_user",
     status_label: "Waiting for user",
     created_at: "2026-08-18T00:00:00Z",
@@ -47,14 +48,23 @@ function request(cancelAllowed: boolean): BookRequest {
   };
 }
 
-test("selected release gets a separate Get button and cancellation follows the server field", async () => {
+test("release choices use concise acquisition buttons and put edition details in the card", async () => {
   const callbacks = new MemoryStore<CallbackIntent>();
   const candidates: CandidateSet = {
     request_id: request(true).id,
     kind: "release",
     candidates: [
-      { id: 1, title: "Edition One", selected: true },
-      { id: 2, title: "Edition Two", selected: false },
+      {
+        id: 1,
+        title: "Rebecca Yarros - Empyrean Book 3 - Onyx Storm (2025)",
+        selected: true,
+      },
+      {
+        id: 2,
+        title: "Iron Flame: The Empyrean, Book 2",
+        selected: false,
+        metadata: { author: "Rebecca Yarros" },
+      },
     ],
   };
   const card = await renderCard({
@@ -67,11 +77,19 @@ test("selected release gets a separate Get button and cancellation follows the s
   });
 
   const labels = card.buttons.flat().map((button) => button.text);
-  assert(labels.includes("Get this book"));
-  assert(labels.includes("Cancel this request"));
+  assert.deepEqual(labels, ["Choose #1", "Choose #2", "Cancel this request"]);
+  assert.equal(labels.includes("Get this book"), false);
+  assert.match(card.text, /#1 Rebecca Yarros - Empyrean Book 3 - Onyx Storm \(2025\)/u);
+  assert.match(card.text, /#2 Iron Flame: The Empyrean, Book 2 — Rebecca Yarros/u);
+  assert.deepEqual(
+    [...callbacks.values.values()]
+      .filter((intent) => intent.action === "acquire_release")
+      .map((intent) => intent.candidateId),
+    [1, 2],
+  );
   assert.equal(
-    [...callbacks.values.values()].find((intent) => intent.action === "authorize")?.candidateId,
-    1,
+    [...callbacks.values.values()].some((intent) => intent.action === "authorize"),
+    false,
   );
   for (const button of card.buttons.flat()) {
     assert.match(button.callback_data, /^vab:[A-Za-z0-9_-]{24}$/u);
@@ -92,6 +110,74 @@ test("selected release gets a separate Get button and cancellation follows the s
     callbacks: new MemoryStore<CallbackIntent>(),
   });
   assert.equal(withoutCancel.buttons.flat().some((button) => button.text.includes("Cancel")), false);
+});
+
+test("selected edition status comes from the API request projection", async () => {
+  const selected = request(false);
+  selected.status = "in_progress";
+  selected.selected_edition = {
+    id: 1,
+    title: "Onyx Storm",
+    author: "Rebecca Yarros",
+    year: "2025",
+    series: "The Empyrean #3",
+  };
+  if (!selected.job) throw new Error("test request must have a job");
+  selected.job.stage = "preflight_library";
+  selected.job.status = "pending";
+  selected.job.user_action = null;
+
+  const card = await renderCard({
+    request: selected,
+    actor: `v1.${"A".repeat(43)}`,
+    route: { chatId: "123" },
+    messageId: 11,
+    callbacks: new MemoryStore<CallbackIntent>(),
+  });
+
+  assert.equal(
+    card.text,
+    [
+      "Audiobook: Safe Book",
+      "Author: Safe Author",
+      "",
+      "Selected edition:",
+      "",
+      "Onyx Storm",
+      "Rebecca Yarros",
+      "2025",
+      "The Empyrean #3",
+      "",
+      "Status:",
+      "Checking your library",
+    ].join("\n"),
+  );
+  assert.equal(card.buttons.flat().some((button) => button.text === "Get this book"), false);
+});
+
+test("selected edition cards suppress stale available-edition copy", async () => {
+  const selected = request(false);
+  selected.selected_edition = {
+    id: 1,
+    title: "Onyx Storm",
+    author: "Rebecca Yarros",
+  };
+  const card = await renderCard({
+    request: selected,
+    candidates: {
+      request_id: selected.id,
+      kind: "release",
+      candidates: [{ id: 1, title: "Stale catalog title", selected: true }],
+    },
+    actor: `v1.${"A".repeat(43)}`,
+    route: { chatId: "123" },
+    messageId: 12,
+    callbacks: new MemoryStore<CallbackIntent>(),
+  });
+
+  assert.equal(card.text.includes("Available editions:"), false);
+  assert.equal(card.text.includes("Stale catalog title"), false);
+  assert.equal(card.buttons[0]?.[0]?.text, "Choose #1");
 });
 
 test("web-only states produce only a generic owner handoff", async () => {

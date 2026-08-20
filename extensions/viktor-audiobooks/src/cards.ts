@@ -27,13 +27,18 @@ function candidateLabel(
   kind: CandidateSet["kind"],
   position: number,
 ): string {
-  if (kind === "release") {
-    const author = candidate.metadata?.author;
-    return `${candidate.title ?? "Release"}${typeof author === "string" ? ` — ${author}` : ""}`
-      .slice(0, 55);
-  }
+  if (kind === "release") return `Choose #${position}`;
   return `Exact match ${position}${candidate.size_bytes ? ` — ${Math.round(candidate.size_bytes / 1_048_576)} MB` : ""}`
     .slice(0, 55);
+}
+
+function releaseDescription(
+  candidate: CandidateSet["candidates"][number],
+  position: number,
+): string {
+  const author = candidate.metadata?.author;
+  const authorSuffix = typeof author === "string" && author ? ` — ${author}` : "";
+  return `#${position} ${candidate.title ?? "Edition"}${authorSuffix}`;
 }
 
 function isTerminal(status: string): boolean {
@@ -61,6 +66,7 @@ function safeStage(stage: string): string {
   switch (stage) {
     case "discover": return "Searching";
     case "select_release": return "Choose an edition";
+    case "preflight_library": return "Checking your library";
     case "select_nzb": return "Choose a download";
     case "submit_sab":
     case "monitor_sab": return "Downloading";
@@ -129,14 +135,8 @@ export async function renderCard(params: {
   };
 
   if (candidates?.kind === "release") {
-    for (const candidate of candidates.candidates.slice(0, 8)) {
-      if (!candidate.selected) {
-        await add(candidateLabel(candidate, "release", 0), "select_release", candidate.id);
-      }
-    }
-    const selected = candidates.candidates.find((candidate) => candidate.selected);
-    if (selected) {
-      await add("Get this book", "authorize", selected.id, "success");
+    for (const [index, candidate] of candidates.candidates.slice(0, 8).entries()) {
+      await add(candidateLabel(candidate, "release", index + 1), "acquire_release", candidate.id);
     }
   } else if (candidates?.kind === "nzb") {
     for (const [index, candidate] of candidates.candidates.slice(0, 8).entries()) {
@@ -147,17 +147,42 @@ export async function renderCard(params: {
     await add("Cancel this request", "cancel", undefined, "danger");
   }
 
-  const lines = [
-    `Audiobook: ${request.title}`,
-    ...(request.author ? [`Author: ${request.author}`] : []),
-    `Status: ${safeRequestStatus(request.status)}`,
-    ...(request.job
-      ? [
-          `Step: ${safeStage(request.job.stage)}`,
-          `Progress: ${safeJobStatus(request.job.status)}`,
-        ]
-      : []),
-  ];
+  const selectedEdition = request.selected_edition;
+  const lines = selectedEdition
+    ? [
+        `Audiobook: ${request.title}`,
+        ...(request.author ? [`Author: ${request.author}`] : []),
+        "",
+        "Selected edition:",
+        "",
+        selectedEdition.title,
+        selectedEdition.author,
+        ...(selectedEdition.year ? [selectedEdition.year] : []),
+        ...(selectedEdition.series ? [selectedEdition.series] : []),
+        "",
+        "Status:",
+        request.job ? safeStage(request.job.stage) : safeRequestStatus(request.status),
+      ]
+    : [
+        `Audiobook: ${request.title}`,
+        ...(request.author ? [`Author: ${request.author}`] : []),
+        `Status: ${safeRequestStatus(request.status)}`,
+        ...(request.job
+          ? [
+              `Step: ${safeStage(request.job.stage)}`,
+              `Progress: ${safeJobStatus(request.job.status)}`,
+            ]
+          : []),
+      ];
+  if (candidates?.kind === "release" && !selectedEdition) {
+    lines.push(
+      "",
+      "Available editions:",
+      ...candidates.candidates
+        .slice(0, 8)
+        .map((candidate, index) => releaseDescription(candidate, index + 1)),
+    );
+  }
   if (
     request.job?.user_action &&
     request.job.user_action !== "select_release_in_web" &&

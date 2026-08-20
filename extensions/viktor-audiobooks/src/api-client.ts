@@ -67,6 +67,21 @@ export class ApplicationApi {
     );
   }
 
+  async releaseAcquisition(
+    actor: string,
+    requestId: string,
+    candidateId: number,
+    idempotencyKey: string,
+  ): Promise<BookRequest> {
+    const response = await this.request<FetchResponse<BookRequest>>(
+      `requests/${encodeURIComponent(requestId)}/release-acquisition/`,
+      this.controlToken,
+      actor,
+      { method: "POST", idempotencyKey, body: { candidate_id: candidateId } },
+    );
+    return response.request;
+  }
+
   async control(
     actor: string,
     requestId: string,

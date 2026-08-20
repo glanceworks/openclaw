@@ -239,19 +239,32 @@ export class ViktorAudiobookController {
         await this.editFromCallback(ctx, actor, current);
         return { handled: true };
       }
-      const action = {
-        select_release: "release-selection",
-        authorize: "reveal-authorization",
-        select_nzb: "nzb-selection",
-        cancel: "cancel",
-      }[intent.action] as "release-selection" | "reveal-authorization" | "nzb-selection" | "cancel";
-      const updated = await this.application.control(
-        actor,
-        intent.requestId,
-        action,
-        intent.idempotencyKey,
-        intent.candidateId,
-      );
+      let updated: BookRequest;
+      if (intent.action === "acquire_release") {
+        if (intent.candidateId === undefined) {
+          await this.editFromCallback(ctx, actor, current);
+          return { handled: true };
+        }
+        updated = await this.application.releaseAcquisition(
+          actor,
+          intent.requestId,
+          intent.candidateId,
+          intent.idempotencyKey,
+        );
+      } else {
+        updated = await this.application.control(
+          actor,
+          intent.requestId,
+          {
+            select_release: "release-selection",
+            authorize: "reveal-authorization",
+            select_nzb: "nzb-selection",
+            cancel: "cancel",
+          }[intent.action],
+          intent.idempotencyKey,
+          intent.candidateId,
+        );
+      }
       await this.stores.callbacks.consume(intent.token);
       await this.editFromCallback(ctx, actor, updated);
       return { handled: true };

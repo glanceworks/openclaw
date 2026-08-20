@@ -3,7 +3,7 @@ import test from "node:test";
 
 import type { OpenClawPluginApi, PluginCommandContext } from "openclaw/plugin-sdk/core";
 
-import type { ApplicationApi } from "./api-client.js";
+import { ApplicationApi } from "./api-client.js";
 import { deriveActor } from "./actor.js";
 import { requestFingerprint } from "./cards.js";
 import {
@@ -107,6 +107,30 @@ test("one actor's concurrent request cards cannot cross callbacks", () => {
   );
   assert.equal(
     callbackMatchesIntent({ intent: first, actor: actorB, chatId: "123", messageId: 11 }),
+    false,
+  );
+  assert.equal(
+    callbackMatchesIntent({ intent: first, actor: actorA, chatId: "456", messageId: 11 }),
+    false,
+  );
+  const threaded = { ...first, route: { chatId: "123", threadId: 7 } };
+  assert(
+    callbackMatchesIntent({
+      intent: threaded,
+      actor: actorA,
+      chatId: "123",
+      messageId: 11,
+      threadId: 7,
+    }),
+  );
+  assert.equal(
+    callbackMatchesIntent({
+      intent: threaded,
+      actor: actorA,
+      chatId: "123",
+      messageId: 11,
+      threadId: 8,
+    }),
     false,
   );
 });
@@ -271,6 +295,7 @@ test("ambiguous terminal notification is recorded before send and not retried", 
     id: "request-1",
     title: "Safe Book",
     author: "Safe Author",
+    selected_edition: null,
     status: "completed",
     status_label: "Completed through a private downstream service",
     created_at: "2026-08-18T00:00:00Z",
@@ -359,6 +384,7 @@ function searchingRequest(): BookRequest {
     id: "request-refresh",
     title: "Onyx Storm",
     author: "Rebecca Yarros",
+    selected_edition: null,
     status: "searching",
     status_label: "Searching",
     created_at: "2026-08-19T00:00:00Z",
@@ -395,6 +421,76 @@ function waitingRequest(cancelAllowed = true): BookRequest {
   };
 }
 
+function preflightRequest(): BookRequest {
+  return {
+    ...waitingRequest(false),
+    selected_edition: {
+      id: 17,
+      title: "Onyx Storm",
+      author: "Rebecca Yarros",
+      year: "2025",
+      series: "The Empyrean #3",
+    },
+    status: "in_progress",
+    status_label: "In progress",
+    updated_at: "2026-08-19T00:00:03Z",
+    job: {
+      stage: "preflight_library",
+      stage_label: "Preflight library",
+      status: "pending",
+      status_label: "Pending",
+      in_progress: false,
+      user_action: null,
+      updated_at: "2026-08-19T00:00:03Z",
+    },
+  };
+}
+
+test("release acquisition uses the control token and callback idempotency key", async (t) => {
+  const originalFetch = globalThis.fetch;
+  t.after(() => {
+    globalThis.fetch = originalFetch;
+  });
+  let requestedUrl = "";
+  let requestedInit: RequestInit | undefined;
+  const request = preflightRequest();
+  globalThis.fetch = (async (input, init) => {
+    requestedUrl = String(input);
+    requestedInit = init;
+    return new Response(JSON.stringify({ request }), {
+      status: 200,
+      headers: { "Content-Type": "application/json" },
+    });
+  }) as typeof fetch;
+  const createReadToken = "c".repeat(32);
+  const controlToken = "d".repeat(32);
+  const api = new ApplicationApi(
+    "https://audiobooks.internal/",
+    createReadToken,
+    controlToken,
+    false,
+  );
+
+  const result = await api.releaseAcquisition(
+    actorA,
+    request.id,
+    17,
+    "stable-callback-key",
+  );
+
+  assert.equal(
+    requestedUrl,
+    `https://audiobooks.internal/api/v1/requests/${request.id}/release-acquisition/`,
+  );
+  assert.equal(requestedInit?.method, "POST");
+  const headers = new Headers(requestedInit?.headers);
+  assert.equal(headers.get("Authorization"), `Bearer ${controlToken}`);
+  assert.equal(headers.get("X-Viktor-Actor"), actorA);
+  assert.equal(headers.get("Idempotency-Key"), "stable-callback-key");
+  assert.equal(requestedInit?.body, JSON.stringify({ candidate_id: 17 }));
+  assert.deepEqual(result.selected_edition, request.selected_edition);
+});
+
 const releaseCandidates: CandidateSet = {
   request_id: "request-refresh",
   kind: "release",
@@ -403,6 +499,318 @@ const releaseCandidates: CandidateSet = {
     { id: 18, title: "Selected edition", selected: true },
   ],
 };
+
+test("edition callback acquires immediately and consumes only after API success", async () => {
+  const senderId = "123";
+  const actor = deriveActor(testConfig.actorDerivationSecret, senderId);
+  const waiting = waitingRequest();
+  const callbacks = new MemoryStore<CallbackIntent>();
+  await callbacks.register("acquire-token", {
+    token: "acquire-token",
+    actor,
+    requestId: waiting.id,
+    action: "acquire_release",
+    candidateId: 17,
+    route: { chatId: senderId },
+    messageId: 52,
+    requestFingerprint: requestFingerprint(waiting),
+    idempotencyKey: "acquire-idempotency",
+    createdAt: 1,
+  });
+  let acquisition:
+    | { actor: string; requestId: string; candidateId: number; idempotencyKey: string }
+    | undefined;
+  let controlCalls = 0;
+  let edited = "";
+  const controller = new ViktorAudiobookController(
+    { logger: { warn() {}, error() {} } } as unknown as OpenClawPluginApi,
+    testConfig,
+    {
+      async status() { return waiting; },
+      async releaseAcquisition(
+        callbackActor: string,
+        requestId: string,
+        candidateId: number,
+        idempotencyKey: string,
+      ) {
+        acquisition = { actor: callbackActor, requestId, candidateId, idempotencyKey };
+        assert(await callbacks.lookup("acquire-token"));
+        return preflightRequest();
+      },
+      async control() { controlCalls += 1; throw new Error("must not use a legacy control"); },
+    } as unknown as ApplicationApi,
+    {
+      creates: new MemoryStore<CreateIntent>(),
+      bindings: new MemoryStore<RequestBinding>(),
+      callbacks,
+      leases: new MemoryStore<{ owner: string; createdAt: number }>(),
+    },
+  );
+
+  await controller.handleCallback({
+    senderId,
+    accountId: "default",
+    isGroup: false,
+    auth: { isAuthorizedSender: true },
+    callback: { payload: "acquire-token", messageId: 52, chatId: senderId },
+    respond: {
+      async reply() { throw new Error("must not reply"); },
+      async editMessage(params) { edited = params.text; },
+    },
+  });
+
+  assert.deepEqual(acquisition, {
+    actor,
+    requestId: waiting.id,
+    candidateId: 17,
+    idempotencyKey: "acquire-idempotency",
+  });
+  assert.equal(controlCalls, 0);
+  assert.equal(await callbacks.lookup("acquire-token"), undefined);
+  assert.match(edited, /Selected edition:\n\nOnyx Storm\nRebecca Yarros\n2025/u);
+  assert.match(edited, /Status:\nChecking your library/u);
+});
+
+test("edition callback retry keeps its idempotency key and duplicate success is harmless", async () => {
+  const senderId = "123";
+  const actor = deriveActor(testConfig.actorDerivationSecret, senderId);
+  const waiting = waitingRequest();
+  const callbacks = new MemoryStore<CallbackIntent>();
+  await callbacks.register("retry-token", {
+    token: "retry-token",
+    actor,
+    requestId: waiting.id,
+    action: "acquire_release",
+    candidateId: 17,
+    route: { chatId: senderId },
+    messageId: 53,
+    requestFingerprint: requestFingerprint(waiting),
+    idempotencyKey: "stable-acquisition-key",
+    createdAt: 1,
+  });
+  const idempotencyKeys: string[] = [];
+  const replies: string[] = [];
+  const controller = new ViktorAudiobookController(
+    { logger: { warn() {}, error() {} } } as unknown as OpenClawPluginApi,
+    testConfig,
+    {
+      async status() { return waiting; },
+      async releaseAcquisition(
+        _actor: string,
+        _requestId: string,
+        _candidateId: number,
+        idempotencyKey: string,
+      ) {
+        idempotencyKeys.push(idempotencyKey);
+        if (idempotencyKeys.length === 1) throw new Error("ambiguous response");
+        return preflightRequest();
+      },
+    } as unknown as ApplicationApi,
+    {
+      creates: new MemoryStore<CreateIntent>(),
+      bindings: new MemoryStore<RequestBinding>(),
+      callbacks,
+      leases: new MemoryStore<{ owner: string; createdAt: number }>(),
+    },
+  );
+  const click = () =>
+    controller.handleCallback({
+      senderId,
+      accountId: "default",
+      isGroup: false,
+      auth: { isAuthorizedSender: true },
+      callback: { payload: "retry-token", messageId: 53, chatId: senderId },
+      respond: {
+        async reply(params) { replies.push(params.text); },
+        async editMessage() {},
+      },
+    });
+
+  await click();
+  assert(await callbacks.lookup("retry-token"));
+  await click();
+  assert.equal(await callbacks.lookup("retry-token"), undefined);
+  await click();
+
+  assert.deepEqual(idempotencyKeys, ["stable-acquisition-key", "stable-acquisition-key"]);
+  assert.equal(replies.length, 2);
+  assert.match(replies[1] ?? "", /expired or belongs to another request/u);
+});
+
+test("wrong callback actor, chat, message, or thread never reaches the API", async () => {
+  const senderId = "123";
+  const actor = deriveActor(testConfig.actorDerivationSecret, senderId);
+  const waiting = waitingRequest();
+  const callbacks = new MemoryStore<CallbackIntent>();
+  await callbacks.register("bound-token", {
+    token: "bound-token",
+    actor,
+    requestId: waiting.id,
+    action: "acquire_release",
+    candidateId: 17,
+    route: { chatId: senderId, threadId: 7 },
+    messageId: 54,
+    requestFingerprint: requestFingerprint(waiting),
+    idempotencyKey: "bound-key",
+    createdAt: 1,
+  });
+  let applicationCalls = 0;
+  const controller = new ViktorAudiobookController(
+    { logger: { warn() {}, error() {} } } as unknown as OpenClawPluginApi,
+    testConfig,
+    {
+      async status() { applicationCalls += 1; throw new Error("must not read status"); },
+      async releaseAcquisition() {
+        applicationCalls += 1;
+        throw new Error("must not acquire");
+      },
+    } as unknown as ApplicationApi,
+    {
+      creates: new MemoryStore<CreateIntent>(),
+      bindings: new MemoryStore<RequestBinding>(),
+      callbacks,
+      leases: new MemoryStore<{ owner: string; createdAt: number }>(),
+    },
+  );
+  const wrongBindings = [
+    { senderId: "456", chatId: senderId, messageId: 54, threadId: 7 },
+    { senderId, chatId: "456", messageId: 54, threadId: 7 },
+    { senderId, chatId: senderId, messageId: 55, threadId: 7 },
+    { senderId, chatId: senderId, messageId: 54, threadId: 8 },
+  ];
+
+  for (const callback of wrongBindings) {
+    let reply = "";
+    await controller.handleCallback({
+      senderId: callback.senderId,
+      accountId: "default",
+      threadId: callback.threadId,
+      isGroup: false,
+      auth: { isAuthorizedSender: true },
+      callback: {
+        payload: "bound-token",
+        messageId: callback.messageId,
+        chatId: callback.chatId,
+      },
+      respond: {
+        async reply(params) { reply = params.text; },
+        async editMessage() { throw new Error("must not edit"); },
+      },
+    });
+    assert.match(reply, /expired or belongs to another request/u);
+  }
+
+  assert.equal(applicationCalls, 0);
+  assert(await callbacks.lookup("bound-token"));
+});
+
+test("stale legacy fingerprint refreshes safely without authorizing", async () => {
+  const senderId = "123";
+  const actor = deriveActor(testConfig.actorDerivationSecret, senderId);
+  const waiting = waitingRequest();
+  const callbacks = new MemoryStore<CallbackIntent>();
+  await callbacks.register("stale-token", {
+    token: "stale-token",
+    actor,
+    requestId: waiting.id,
+    action: "authorize",
+    candidateId: 17,
+    route: { chatId: senderId },
+    messageId: 56,
+    requestFingerprint: "legacy-request-fingerprint",
+    idempotencyKey: "legacy-key",
+    createdAt: 1,
+  });
+  let mutationCalls = 0;
+  let edits = 0;
+  const controller = new ViktorAudiobookController(
+    { logger: { warn() {}, error() {} } } as unknown as OpenClawPluginApi,
+    testConfig,
+    {
+      async status() { return waiting; },
+      async candidates() { return releaseCandidates; },
+      async control() { mutationCalls += 1; throw new Error("must not authorize"); },
+      async releaseAcquisition() { mutationCalls += 1; throw new Error("must not acquire"); },
+    } as unknown as ApplicationApi,
+    {
+      creates: new MemoryStore<CreateIntent>(),
+      bindings: new MemoryStore<RequestBinding>(),
+      callbacks,
+      leases: new MemoryStore<{ owner: string; createdAt: number }>(),
+    },
+  );
+
+  await controller.handleCallback({
+    senderId,
+    accountId: "default",
+    isGroup: false,
+    auth: { isAuthorizedSender: true },
+    callback: { payload: "stale-token", messageId: 56, chatId: senderId },
+    respond: {
+      async reply() { throw new Error("must not reply"); },
+      async editMessage() { edits += 1; },
+    },
+  });
+
+  assert.equal(mutationCalls, 0);
+  assert.equal(edits, 1);
+  assert(await callbacks.lookup("stale-token"));
+});
+
+test("legacy authorize callback keeps the separate reveal control", async () => {
+  const senderId = "123";
+  const actor = deriveActor(testConfig.actorDerivationSecret, senderId);
+  const waiting = waitingRequest();
+  const callbacks = new MemoryStore<CallbackIntent>();
+  await callbacks.register("authorize-token", {
+    token: "authorize-token",
+    actor,
+    requestId: waiting.id,
+    action: "authorize",
+    candidateId: 17,
+    route: { chatId: senderId },
+    messageId: 57,
+    requestFingerprint: requestFingerprint(waiting),
+    idempotencyKey: "authorize-key",
+    createdAt: 1,
+  });
+  let legacyControl: string | undefined;
+  let acquisitionCalls = 0;
+  const controller = new ViktorAudiobookController(
+    { logger: { warn() {}, error() {} } } as unknown as OpenClawPluginApi,
+    testConfig,
+    {
+      async status() { return waiting; },
+      async control(_actor: string, _requestId: string, action: string) {
+        legacyControl = action;
+        return preflightRequest();
+      },
+      async releaseAcquisition() {
+        acquisitionCalls += 1;
+        throw new Error("must not use release acquisition");
+      },
+    } as unknown as ApplicationApi,
+    {
+      creates: new MemoryStore<CreateIntent>(),
+      bindings: new MemoryStore<RequestBinding>(),
+      callbacks,
+      leases: new MemoryStore<{ owner: string; createdAt: number }>(),
+    },
+  );
+
+  await controller.handleCallback({
+    senderId,
+    accountId: "default",
+    isGroup: false,
+    auth: { isAuthorizedSender: true },
+    callback: { payload: "authorize-token", messageId: 57, chatId: senderId },
+    respond: { async reply() {}, async editMessage() {} },
+  });
+
+  assert.equal(legacyControl, "reveal-authorization");
+  assert.equal(acquisitionCalls, 0);
+  assert.equal(await callbacks.lookup("authorize-token"), undefined);
+});
 
 test("poll refresh edits a searching card with portable waiting-user controls", async () => {
   const callbacks = new MemoryStore<CallbackIntent>();
@@ -469,7 +877,7 @@ test("poll refresh edits a searching card with portable waiting-user controls", 
   assert.equal(interactive.blocks[0]?.type, "buttons");
   assert.deepEqual(
     interactive.blocks[0]?.buttons.map((button) => button.text),
-    ["Onyx Storm edition", "Get this book", "Cancel this request"],
+    ["Choose #1", "Choose #2", "Cancel this request"],
   );
   for (const button of interactive.blocks[0]?.buttons ?? []) {
     assert.match(button.callback_data, /^vab:[A-Za-z0-9_-]{24}$/u);
@@ -480,6 +888,69 @@ test("poll refresh edits a searching card with portable waiting-user controls", 
     assert.equal(callback.route.chatId, binding.route.chatId);
     assert.equal(callback.requestFingerprint, requestFingerprint(waitingRequest()));
   }
+});
+
+test("poll refresh rebuilds selected edition status from the API after restart", async () => {
+  const bindings = new MemoryStore<RequestBinding>();
+  const initial = searchingRequest();
+  const binding: RequestBinding = {
+    requestId: initial.id,
+    actor: actorA,
+    route: { chatId: "123" },
+    messageId: 44,
+    fingerprint: requestFingerprint(initial),
+    nextPollAt: 0,
+    failureCount: 0,
+    terminal: false,
+    terminalNotified: false,
+    createdAt: 1,
+  };
+  await bindings.register(binding.requestId, binding);
+  let editedText = "";
+  let candidateCalls = 0;
+  const controllerAfterRestart = new ViktorAudiobookController(
+    {
+      config: {},
+      logger: { warn() {}, error() {} },
+      runtime: {
+        gateway: {
+          async isAvailable() { return true; },
+          async request(_method: string, request: Record<string, unknown>) {
+            editedText = String((request.params as Record<string, unknown>).content);
+          },
+        },
+      },
+    } as unknown as OpenClawPluginApi,
+    testConfig,
+    {
+      async status() { return preflightRequest(); },
+      async candidates() {
+        candidateCalls += 1;
+        throw new Error("selected edition must come from status");
+      },
+    } as unknown as ApplicationApi,
+    {
+      creates: new MemoryStore<CreateIntent>(),
+      bindings,
+      callbacks: new MemoryStore<CallbackIntent>(),
+      leases: new MemoryStore<{ owner: string; createdAt: number }>(),
+    },
+  );
+
+  const refreshed = await (
+    controllerAfterRestart as unknown as {
+      pollBinding(value: RequestBinding): Promise<boolean>;
+    }
+  ).pollBinding(binding);
+
+  assert.equal(refreshed, true);
+  assert.equal(candidateCalls, 0);
+  assert.match(editedText, /Selected edition:\n\nOnyx Storm\nRebecca Yarros/u);
+  assert.match(editedText, /Status:\nChecking your library/u);
+  assert.equal(
+    (await bindings.lookup(binding.requestId))?.fingerprint,
+    requestFingerprint(preflightRequest()),
+  );
 });
 
 test("failed status edit warns safely, schedules retry, and reports zero refreshed cards", async () => {
