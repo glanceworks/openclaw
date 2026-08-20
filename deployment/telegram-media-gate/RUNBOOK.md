@@ -24,6 +24,28 @@ The official image tag/label is `2026.7.1-2`; `openclaw --version` and
 `/app/package.json` report `2026.7.1`. Candidate behavior validation uses a
 network-disabled, read-only container with only a disposable `/tmp` tmpfs.
 
+## Phase 2 audiobook canary precondition
+
+Before enabling the Phase 2 acquisition flow, retire the one known request from
+the earlier selected-then-authorized flow:
+
+- title: `Onyx Storm`
+- request: `beba7972-4dc0-4523-a303-02d90f6336dd`
+
+Use the same stable API client and Viktor actor that own the request. Read its
+current status first and require `cancel_allowed: true`. Then call
+`POST /api/v1/requests/beba7972-4dc0-4523-a303-02d90f6336dd/cancel/` with the
+`requests:control` bearer token, `X-Viktor-Actor`, a fresh `Idempotency-Key`,
+`Content-Type: application/json`, and an empty JSON object. Verify the response
+and a subsequent status read report the request as canceled, and retain the
+normal API audit event and control receipt. Never edit SQLite or delete the
+request directly.
+
+Keep the earlier release-selection and deployment-milestone evidence unchanged.
+Create the fresh Phase 2 canary only after the old request is terminal. This
+pre-production reset replaces migration machinery for this controlled rollout;
+reassess migration before a public rollout with historical user cards.
+
 ## Owner-approved live procedure
 
 Run from the Viktor checkout after confirming its commit contains the reviewed

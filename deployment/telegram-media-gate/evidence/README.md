@@ -19,6 +19,24 @@ proof; the live Viktor service was not inspected or changed.
 The official correction tag is `2026.7.1-2`; the packaged runtime version is
 `2026.7.1`. Current readiness validates both identities independently.
 
+## Viktor Audiobooks Phase 2 canary reset
+
+Phase 2 uses edition selection as the acquisition authorization. The controlled
+pre-production environment has one known card from the earlier two-step flow:
+the selected-but-unauthorized `Onyx Storm` request
+`beba7972-4dc0-4523-a303-02d90f6336dd`.
+
+Do not add renderer versioning, startup card migration, callback rewriting, or
+fingerprint migration for this canary. Before enabling the Phase 2 acquisition
+flow, retire that request through Audiobook Automation's authenticated,
+idempotent cancellation control and verify its terminal state. Do not edit its
+SQLite state or delete its records directly. The existing release-selection
+canary and deployment-milestone evidence files remain unchanged as historical
+proof.
+
+This exception is limited to the controlled pre-production canary. Reassess
+card migration before any public rollout that may retain historical user cards.
+
 ## Historical 2026.5.4 evidence
 
 This record summarizes evidence collected at `2026-07-13T04:55:21Z` from a
