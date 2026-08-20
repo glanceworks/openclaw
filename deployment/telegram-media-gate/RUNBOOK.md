@@ -11,7 +11,7 @@ modify Synology.
 
 - Branch: `viktor-acquisition-flow`
 - Reviewed Phase 2 source HEAD:
-  `54b36e5957ca3a353c7437b4ef2b07e18a50e068`
+  `4973915d6bd3cb8d1697a793b07c64cc7859a9a3`
 - Reviewed flow: selecting an edition invokes the Viktor release-acquisition
   callback directly; the separate `Get this book` step is not part of Phase 2.
 - Release tag: `v2026.7.1-2`
@@ -84,7 +84,7 @@ builds and inspects images but does not recreate the gateway.
 set -euo pipefail
 
 export REVIEWED_BRANCH='viktor-acquisition-flow'
-export REVIEWED_HEAD='54b36e5957ca3a353c7437b4ef2b07e18a50e068'
+export REVIEWED_HEAD='4973915d6bd3cb8d1697a793b07c64cc7859a9a3'
 export REVIEWED_EXTENSIONS='viktor-audiobooks'
 export TARGET_PLATFORM='linux/amd64'
 export OPENCLAW_BASE_IMAGE='ghcr.io/openclaw/openclaw:2026.7.1-2@sha256:f56744f2cbd2c2477c739158fbc4cf594300aa535767a87da3bcd9cafa150160'
@@ -170,7 +170,7 @@ proof for this candidate.
 The fresh evidence must record:
 
 - branch `viktor-acquisition-flow` and reviewed HEAD
-  `54b36e5957ca3a353c7437b4ef2b07e18a50e068`;
+  `4973915d6bd3cb8d1697a793b07c64cc7859a9a3`;
 - the exact immutable `OPENCLAW_BASE_IMAGE`, reviewed extension list, donor
   image tag and ID, candidate tag, and candidate image ID;
 - SHA-256 results for the bundled Viktor `index.js` and
@@ -196,7 +196,7 @@ approved activation. Keep the reviewed values from the build section unchanged.
 ```bash
 set -euo pipefail
 
-export REVIEWED_HEAD='54b36e5957ca3a353c7437b4ef2b07e18a50e068'
+export REVIEWED_HEAD='4973915d6bd3cb8d1697a793b07c64cc7859a9a3'
 export OPENCLAW_BASE_IMAGE='ghcr.io/openclaw/openclaw:2026.7.1-2@sha256:f56744f2cbd2c2477c739158fbc4cf594300aa535767a87da3bcd9cafa150160'
 export OPENCLAW_VIKTOR_BUILD_IMAGE="openclaw-local:viktor-build-${REVIEWED_HEAD}"
 export CANDIDATE_TAG="openclaw-local:viktor-phase2-${REVIEWED_HEAD}"
@@ -216,7 +216,7 @@ Persistent `/home/node/.openclaw` and workspace bind mounts are reused unchanged
 ```bash
 set -euo pipefail
 
-export REVIEWED_HEAD='54b36e5957ca3a353c7437b4ef2b07e18a50e068'
+export REVIEWED_HEAD='4973915d6bd3cb8d1697a793b07c64cc7859a9a3'
 export OPENCLAW_BASE_IMAGE='ghcr.io/openclaw/openclaw:2026.7.1-2@sha256:f56744f2cbd2c2477c739158fbc4cf594300aa535767a87da3bcd9cafa150160'
 export OPENCLAW_VIKTOR_BUILD_IMAGE="openclaw-local:viktor-build-${REVIEWED_HEAD}"
 export OPENCLAW_IMAGE="openclaw-local:viktor-phase2-${REVIEWED_HEAD}"
@@ -260,7 +260,7 @@ set -euo pipefail
 export ROLLBACK_TAG='openclaw-local:viktor-pre-2026.7.1-2-20260819'
 export OPENCLAW_IMAGE="$ROLLBACK_TAG"
 export OPENCLAW_BASE_IMAGE='ghcr.io/openclaw/openclaw:2026.7.1-2@sha256:f56744f2cbd2c2477c739158fbc4cf594300aa535767a87da3bcd9cafa150160'
-export OPENCLAW_VIKTOR_BUILD_IMAGE='openclaw-local:viktor-build-54b36e5957ca3a353c7437b4ef2b07e18a50e068'
+export OPENCLAW_VIKTOR_BUILD_IMAGE='openclaw-local:viktor-build-4973915d6bd3cb8d1697a793b07c64cc7859a9a3'
 
 test "$(docker image inspect --format '{{.Id}}' "$ROLLBACK_TAG")" = \
   'sha256:142bc42a1333464142bb252e177bd5702f042f89645b7b22988c7f9d3e017bb2'

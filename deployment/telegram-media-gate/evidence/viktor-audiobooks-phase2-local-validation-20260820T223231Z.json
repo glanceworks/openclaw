@@ -7,6 +7,7 @@
     "branch": "viktor-acquisition-flow",
     "head": "c52501df8e1b7b3986af909aa3c4c183440d0d39",
     "reviewed_phase2_application_head": "54b36e5957ca3a353c7437b4ef2b07e18a50e068",
+    "reviewed_phase2_candidate_head": "4973915d6bd3cb8d1697a793b07c64cc7859a9a3",
     "working_tree_clean_before_testing": true
   },
   "dependency_install": {
