@@ -11,6 +11,11 @@ import type {
   TelegramButton,
 } from "./types.js";
 
+// Telegram edits cannot split a card across messages, so leave headroom below its 4,000-character limit.
+const TELEGRAM_EDITABLE_CARD_TEXT_BUDGET = 3_900;
+const RELEASE_TITLE_TEXT_BUDGET = 220;
+const RELEASE_AUTHOR_TEXT_BUDGET = 100;
+
 export function requestFingerprint(request: BookRequest): string {
   return [
     request.id,
@@ -32,13 +37,33 @@ function candidateLabel(
     .slice(0, 55);
 }
 
+function truncateCardText(value: string, maximumLength: number): string {
+  if (value.length <= maximumLength) return value;
+  if (maximumLength <= 1) return "…".slice(0, maximumLength);
+
+  let end = maximumLength - 1;
+  const finalCodeUnit = value.charCodeAt(end - 1);
+  if (finalCodeUnit >= 0xd800 && finalCodeUnit <= 0xdbff) end -= 1;
+  return `${value.slice(0, end)}…`;
+}
+
+function conciseCardValue(value: string, maximumLength: number): string {
+  return truncateCardText(value.trim().replace(/\s+/gu, " "), maximumLength);
+}
+
 function releaseDescription(
   candidate: CandidateSet["candidates"][number],
   position: number,
 ): string {
   const author = candidate.metadata?.author;
-  const authorSuffix = typeof author === "string" && author ? ` — ${author}` : "";
-  return `#${position} ${candidate.title ?? "Edition"}${authorSuffix}`;
+  const title = candidate.title?.trim()
+    ? conciseCardValue(candidate.title, RELEASE_TITLE_TEXT_BUDGET)
+    : "Edition";
+  const authorSuffix =
+    typeof author === "string" && author.trim()
+      ? ` — ${conciseCardValue(author, RELEASE_AUTHOR_TEXT_BUDGET)}`
+      : "";
+  return `#${position} ${title}${authorSuffix}`;
 }
 
 function isTerminal(status: string): boolean {
@@ -191,7 +216,11 @@ export async function renderCard(params: {
     lines.push("Owner action required in Audiobook Automation.");
   }
   if (isTerminal(request.status)) lines.push("This request is finished.");
-  return { text: lines.join("\n"), buttons: rows, callbackTokens: tokens };
+  return {
+    text: truncateCardText(lines.join("\n"), TELEGRAM_EDITABLE_CARD_TEXT_BUDGET),
+    buttons: rows,
+    callbackTokens: tokens,
+  };
 }
 
 export async function bindCallbackMessage(

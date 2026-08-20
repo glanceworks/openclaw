@@ -112,6 +112,60 @@ test("release choices use concise acquisition buttons and put edition details in
   assert.equal(withoutCancel.buttons.flat().some((button) => button.text.includes("Cancel")), false);
 });
 
+test("release cards stay within the editable Telegram budget for eight maximum-length editions", async () => {
+  const callbacks = new MemoryStore<CallbackIntent>();
+  const maximumRequest = request(true);
+  maximumRequest.title = "T".repeat(500);
+  maximumRequest.author = "A".repeat(300);
+  const candidates: CandidateSet = {
+    request_id: maximumRequest.id,
+    kind: "release",
+    candidates: Array.from({ length: 8 }, (_, index) => {
+      const position = index + 1;
+      return {
+        id: position,
+        title: `Edition ${position} `.padEnd(500, "T"),
+        selected: position === 1,
+        metadata: { author: `Author ${position} `.padEnd(500, "A") },
+      };
+    }),
+  };
+
+  const card = await renderCard({
+    request: maximumRequest,
+    candidates,
+    actor: `v1.${"A".repeat(43)}`,
+    route: { chatId: "123" },
+    messageId: 14,
+    callbacks,
+  });
+
+  assert.ok(card.text.length < 4_000);
+  assert.deepEqual(card.buttons.flat().map((button) => button.text), [
+    "Choose #1",
+    "Choose #2",
+    "Choose #3",
+    "Choose #4",
+    "Choose #5",
+    "Choose #6",
+    "Choose #7",
+    "Choose #8",
+    "Cancel this request",
+  ]);
+  for (let position = 1; position <= 8; position += 1) {
+    assert.match(
+      card.text,
+      new RegExp(`#${position} Edition ${position} T+… — Author ${position} A+…`, "u"),
+    );
+  }
+  assert.deepEqual(
+    [...callbacks.values.values()]
+      .filter((intent) => intent.action === "acquire_release")
+      .map((intent) => intent.candidateId),
+    [1, 2, 3, 4, 5, 6, 7, 8],
+  );
+});
+
 test("selected edition status comes from the API request projection", async () => {
   const selected = request(false);
   selected.status = "in_progress";
@@ -152,6 +206,7 @@ test("selected edition status comes from the API request projection", async () =
       "Checking your library",
     ].join("\n"),
   );
+  assert.ok(card.text.length < 4_000);
   assert.equal(card.buttons.flat().some((button) => button.text === "Get this book"), false);
 });
 
