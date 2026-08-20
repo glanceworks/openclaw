@@ -28,6 +28,29 @@ The official image tag/label is `2026.7.1-2`; `openclaw --version` and
 `/app/package.json` report `2026.7.1`. Candidate behavior validation uses a
 network-disabled, read-only container with only a disposable `/tmp` tmpfs.
 
+## Completed local Phase 2 validation
+
+The clean `viktor-acquisition-flow` checkout at
+`c52501df8e1b7b3986af909aa3c4c183440d0d39` passed the focused local plugin
+shard after `pnpm install --frozen-lockfile` completed successfully:
+
+```text
+pnpm test extensions/viktor-audiobooks
+Test Files: 5 passed
+Duration: 16.65s
+```
+
+The shard covered the direct release-acquisition callback flow, concise and
+selected-edition card rendering, Telegram card-size protection, stale-edition
+and stale-fingerprint handling, callback idempotency and retry safety,
+actor/chat/message/thread binding, legacy authorize-callback compatibility,
+and polling refresh behavior. The timestamped record is
+`evidence/viktor-audiobooks-phase2-local-validation-20260820T223231Z.json`.
+
+This is source-level proof only. No image was built and no deployment was
+performed. Complete the candidate-image evidence required below before seeking
+owner approval for gateway activation.
+
 ## Phase 2 audiobook canary precondition
 
 Before enabling the Phase 2 acquisition flow, retire the one known request from

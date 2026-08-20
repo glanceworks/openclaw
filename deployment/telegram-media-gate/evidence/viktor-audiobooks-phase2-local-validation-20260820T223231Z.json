@@ -1,0 +1,46 @@
+{
+  "schema_version": "1.0.0",
+  "recorded_at": "2026-08-20T22:32:31Z",
+  "milestone": "viktor-audiobooks Phase 2 local plugin shard validated",
+  "evidence_source": "local validation results supplied for milestone recording",
+  "source": {
+    "branch": "viktor-acquisition-flow",
+    "head": "c52501df8e1b7b3986af909aa3c4c183440d0d39",
+    "reviewed_phase2_application_head": "54b36e5957ca3a353c7437b4ef2b07e18a50e068",
+    "working_tree_clean_before_testing": true
+  },
+  "dependency_install": {
+    "command": "pnpm install --frozen-lockfile",
+    "result": "passed"
+  },
+  "test": {
+    "command": "pnpm test extensions/viktor-audiobooks",
+    "result": "passed",
+    "shard": "viktor-audiobooks",
+    "summary": "Viktor plugin test shard passed",
+    "test_files": {
+      "passed": 5,
+      "failed": 0
+    },
+    "duration_seconds": 16.65,
+    "validated_areas": [
+      "release acquisition callback flow",
+      "concise edition buttons",
+      "selected edition rendering",
+      "Telegram card size budget",
+      "stale available-edition suppression",
+      "callback idempotency behavior",
+      "retry safety",
+      "actor/chat/message/thread binding",
+      "stale fingerprint handling",
+      "legacy authorize callback compatibility",
+      "polling refresh behavior"
+    ]
+  },
+  "scope": {
+    "source_validation_completed": true,
+    "image_built": false,
+    "deployment_performed": false,
+    "application_code_changed_during_evidence_capture": false
+  }
+}

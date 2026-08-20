@@ -19,6 +19,22 @@ proof; the live Viktor service was not inspected or changed.
 The official correction tag is `2026.7.1-2`; the packaged runtime version is
 `2026.7.1`. Current readiness validates both identities independently.
 
+## Viktor Audiobooks Phase 2 local validation
+
+`viktor-audiobooks-phase2-local-validation-20260820T223231Z.json` records the
+successful source-level Phase 2 milestone on the clean
+`viktor-acquisition-flow` checkout at
+`c52501df8e1b7b3986af909aa3c4c183440d0d39`. Dependency installation completed
+with `pnpm install --frozen-lockfile`; then
+`pnpm test extensions/viktor-audiobooks` passed all five test files in 16.65
+seconds.
+
+The focused shard covers acquisition callbacks, edition-card rendering and
+size limits, stale-state suppression, callback idempotency and binding, retry
+safety, legacy callback compatibility, and polling refresh behavior. This
+record is not candidate-image or deployment evidence: no image was built and
+no deployment was performed.
+
 ## Viktor Audiobooks Phase 2 canary reset
 
 Phase 2 uses edition selection as the acquisition authorization. The controlled
