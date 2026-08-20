@@ -303,3 +303,7 @@ extensions/diffs-language-pack/assets/viewer-runtime.js
 /.opengrep-out/
 /.crabbox-artifacts
 .comux*
+.env.viktor-audiobooks
+.env.before-playwright-runtime
+docker-compose.yml.bak
+docker-compose.yml.bak.*

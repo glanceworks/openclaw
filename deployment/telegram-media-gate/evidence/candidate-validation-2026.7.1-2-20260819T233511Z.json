@@ -1,0 +1,83 @@
+{
+  "schema_version": "1.0.0",
+  "validation_timestamp": "2026-08-19T23:35:11Z",
+  "source": {
+    "branch": "local/telegram-media-gate-2026.7.1-2",
+    "pre_refresh_head": "5f52866a10b6dbaed4c6618ec6002c04747ac8e3",
+    "trusted_source": true,
+    "remote_backend": null,
+    "remote_backend_note": "The source host had no Node or Crabbox binary; the explicitly requested Docker and focused deployment proof ran locally."
+  },
+  "candidate": {
+    "tag": "openclaw-local:playwright-runtime-2026.7.1-2-validated",
+    "image_id": "sha256:7551175300b8d84798e6250befaf0364e4ec11853611d4753a676c76887f383b",
+    "architecture": "amd64",
+    "os": "linux",
+    "configured_user": "node",
+    "entrypoint": ["/opt/openclaw-telegram-media-gate/deployment/entrypoint.sh"],
+    "command": ["node", "openclaw.mjs", "gateway", "--allow-unconfigured"],
+    "node_version": "v24.16.0",
+    "openclaw_version": "2026.7.1"
+  },
+  "build": {
+    "dockerfile": "Dockerfile.playwright-runtime",
+    "base_reference": "ghcr.io/openclaw/openclaw:2026.7.1-2@sha256:f56744f2cbd2c2477c739158fbc4cf594300aa535767a87da3bcd9cafa150160",
+    "result": "passed",
+    "build_time_base_validation": "passed",
+    "build_time_readiness_validation": "passed",
+    "build_time_patch_result": "patched deterministically",
+    "intentional_warning": "OPENCLAW_BASE_IMAGE has no default, so Docker reports InvalidDefaultArgInFrom before the required build argument is supplied."
+  },
+  "proof": {
+    "deployment_unit_tests": {"passed": 33, "failed": 0},
+    "source_readiness": "passed",
+    "base_image_validation": "passed",
+    "controlled_patch_derivation": "passed; one changed bundle; idempotent",
+    "candidate_startup_verifier": "passed",
+    "runtime_media_smoke": "passed",
+    "runtime_media_contracts": [
+      "owner normal continuation",
+      "owner media command",
+      "media-rights /movie and /show",
+      "media-rights free-form restriction without runner invocation",
+      "unauthorized ignore without runner invocation",
+      "year and known-year clarification",
+      "no-progress and invalid-selection handling",
+      "Sonarr parent-series shape",
+      "public-surface sanitization",
+      "timeout status contract"
+    ],
+    "gateway_startup": {
+      "result": "passed",
+      "health_response": {"ok": true, "status": "live"},
+      "container_health": "healthy",
+      "network_mode": "none",
+      "published_ports": [],
+      "read_only_rootfs": true,
+      "temporary_state_only": true,
+      "container_removed_after_proof": true
+    },
+    "compose_render": {
+      "user": "1001:1001",
+      "command_override": null,
+      "privileged": false,
+      "added_capabilities": [],
+      "published_host_ips": ["127.0.0.1", "127.0.0.1"],
+      "published_ports": [18789, 8787],
+      "state_mount_target": "/home/node/.openclaw",
+      "workspace_mount_target": "/home/node/.openclaw/workspace"
+    },
+    "playwright": {
+      "packages_present": ["playwright", "playwright-core"],
+      "browser_shared_libraries_present": ["libnss3", "libgbm.so.1", "libasound.so.2"],
+      "baked_browser": false,
+      "behavior_change": "none; the historical custom Dockerfile installs browser libraries but does not bake Chromium"
+    }
+  },
+  "live_system": {
+    "gateway_container_inspected": false,
+    "gateway_container_changed": false,
+    "compose_service_changed": false,
+    "audiobook_plugin_registered": false
+  }
+}

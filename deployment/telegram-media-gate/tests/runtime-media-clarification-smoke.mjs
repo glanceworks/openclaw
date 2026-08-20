@@ -271,6 +271,33 @@ try {
   assert.equal(unknownResult.reason, 'unknown_user');
   assert.equal(runnerInputs.length, 0);
 
+  const ownerNormalResult = await mediaAccess('summarize my day', FULL_ACCESS_USER_ID);
+  assert.equal(ownerNormalResult.decision, 'continue_normal');
+  assert.equal(ownerNormalResult.reason, 'full_access_user');
+  assert.equal(ownerNormalResult.responseText, null);
+  assert.equal(runnerInputs.length, 0);
+
+  const restrictedResult = await mediaAccess('summarize my day');
+  assert.equal(restrictedResult.decision, 'intercept_media_only');
+  assert.equal(restrictedResult.reason, 'media_request_user');
+  assert.equal(restrictedResult.route, 'telegram_media_stub');
+  assert.equal(
+    restrictedResult.responseText,
+    'Media-only access: use /movie, /show, /mediahelp.'
+  );
+  assert.deepEqual(restrictedResult.allowedCommands, ['/movie', '/show', '/mediahelp']);
+  assert.equal(runnerInputs.length, 0);
+
+  const ownerMediaResult = await mediaAccess(
+    '/show Dragons: Race to the Edge (2015)',
+    FULL_ACCESS_USER_ID
+  );
+  assert.equal(ownerMediaResult.decision, 'intercept_media_only');
+  assert.equal(ownerMediaResult.reason, 'full_access_command');
+  assert.equal(ownerMediaResult.responseText, 'Dragons: Race to the Edge (2015) added to Sonarr.');
+  assert.equal(runnerInputs.at(-1), 'Dragons: Race to the Edge 2015 show');
+  resetMutableData();
+
   for (const query of [
     'Dragons: Race to the Edge (2015) show',
     'Dragons: Race to the Edge 2015 show'

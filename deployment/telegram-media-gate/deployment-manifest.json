@@ -1,6 +1,7 @@
 {
   "schema_version": "1.0.0",
-  "expected_openclaw_version": "2026.5.4",
+  "expected_release_tag": "2026.7.1-2",
+  "expected_openclaw_version": "2026.7.1",
   "runtime_source_commit": "580007d45bd4e903d829d1f17ed61dd4341e0dcd",
   "patch_provenance_commit": "6049d34d751333d8d0dd6a77d506c9a42d19d495",
   "archive_sha256": "97de9b43bc680614b28ce33d245ece5a0df8bbb91af3b8662ccafe9a330a676e",
@@ -67,21 +68,21 @@
   "patched_import_url": "file:///opt/openclaw-telegram-media-gate/scripts/telegram-media-gate.mjs",
   "upstream_base_image": {
     "repository": "ghcr.io/openclaw/openclaw",
-    "version": "2026.5.4",
-    "registry_index_digest": "sha256:7f4dfd4ed0d5469a4f12eccaa5f46b0c70fca802806be625dce782e69203e689",
-    "verified_manifest_digest": "sha256:69895e31e3c36030b465b364365e9a22160737b000a0712082c7278e18f80e56",
+    "version": "2026.7.1-2",
+    "registry_index_digest": "sha256:8789721d2e9b24b780a1504b56deb4c6bd5c7dbf96a1dd117e7c45c2ed72c8ac",
+    "verified_manifest_digest": "sha256:f56744f2cbd2c2477c739158fbc4cf594300aa535767a87da3bcd9cafa150160",
     "verified_manifest_digest_kind": "platform-manifest",
     "selected_platform": {
       "os": "linux",
       "architecture": "amd64"
     },
-    "reference": "ghcr.io/openclaw/openclaw:2026.5.4@sha256:69895e31e3c36030b465b364365e9a22160737b000a0712082c7278e18f80e56",
-    "evidence_record": "evidence/registry-openclaw-2026.5.4-20260713T163330Z.json",
+    "reference": "ghcr.io/openclaw/openclaw:2026.7.1-2@sha256:f56744f2cbd2c2477c739158fbc4cf594300aa535767a87da3bcd9cafa150160",
+    "evidence_record": "evidence/registry-openclaw-2026.7.1-2-20260819T231706Z.json",
     "local_known_good_image_id": "sha256:142bc42a1333464142bb252e177bd5702f042f89645b7b22988c7f9d3e017bb2",
     "local_image_id_role": "rollback evidence only; not an upstream registry digest"
   },
   "version_probe": {
-    "expected": "2026.5.4",
+    "expected": "2026.7.1",
     "contract": {
       "kind": "json-file",
       "path": "package.json",
@@ -96,14 +97,14 @@
           "field_path": [
             "version"
           ],
-          "expected": "2026.5.4"
+          "expected": "2026.7.1"
         }
       ]
     },
     "evidence": {
-      "record": "evidence/known-good-image-20260713T045521Z.json",
+      "record": "evidence/upstream-image-2026.7.1-2-20260819T231706Z.json",
       "source_path": "image-copy/package.json",
-      "sha256": "ebfe4600fb2e0f50f28824cf39ea97e47a361f03059b662af704ee61ed6a1206"
+      "sha256": "0005244d0c40e00c6fbc1e2809e78f4d138d22633d6e5eabbe971cb70d2be04e"
     }
   },
   "bundle": {
@@ -129,9 +130,9 @@
         }
       ]
     },
-    "expected_path": "bot-D-7bCSXH.js",
-    "original_sha256": "31f372aa5527d3db4769f3ac0c53547b395fb37defd70e62b5655a823f0e861b",
-    "patched_sha256": "4b37c23bc7e335d4768f4d22f83ccacf7a204773e759522d25065d3b39d436a5",
+    "expected_path": "telegram-ingress-spool-Dd3cDhXe.js",
+    "original_sha256": "5e5d822dc380afd59a408b2e012e41a741db76951f54f3eb1125fc174c166b37",
+    "patched_sha256": "b3919853ad6fa913baed6def5194a2ddf15b40465a7192735e94b2752edcc1d1",
     "structural_anchors": [
       {
         "name": "telegram_dedupe_helper",
@@ -140,7 +141,7 @@
       },
       {
         "name": "inbound_message_handoff",
-        "text": "\t\t\tawait processInboundMessage({\n\t\t\t\tctx: event.ctx,\n\t\t\t\tmsg: event.msg,\n\t\t\t\tchatId: event.chatId,\n\t\t\t\tresolvedThreadId,\n\t\t\t\tdmThreadId,\n\t\t\t\tstoreAllowFrom,\n\t\t\t\tsendOversizeWarning: event.sendOversizeWarning,\n\t\t\t\toversizeLogMessage: event.oversizeLogMessage\n\t\t\t});",
+        "text": "\t\t\tawait processInboundMessage({\n\t\t\t\tctx: event.ctx,\n\t\t\t\tmsg: event.msg,\n\t\t\t\tchatId: event.chatId,\n\t\t\t\tisGroup: event.isGroup,\n\t\t\t\tisForum: event.isForum,\n\t\t\t\tresolvedThreadId,\n\t\t\t\tdmThreadId,\n\t\t\t\tdmPolicy,\n\t\t\t\tstoreAllowFrom,\n\t\t\t\tsenderId: event.senderId,\n\t\t\t\teffectiveGroupAllow,\n\t\t\t\teffectiveDmAllow,\n\t\t\t\tgroupConfig: event.isGroup ? groupConfig : void 0,\n\t\t\t\ttopicConfig,\n\t\t\t\tsendOversizeWarning: event.sendOversizeWarning,\n\t\t\t\toversizeLogMessage: event.oversizeLogMessage,\n\t\t\t\tdispatchDedupeKeys,\n\t\t\t\t...promptContextBoundaryOptions(promptContextMinTimestampMs, promptContextAmbientWatermark)\n\t\t\t});",
         "expected_count": 1
       }
     ]

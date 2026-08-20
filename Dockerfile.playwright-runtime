@@ -1,4 +1,9 @@
 ARG OPENCLAW_BASE_IMAGE
+ARG OPENCLAW_VIKTOR_BUILD_IMAGE
+# Both images intentionally have no defaults. The media-gate manifest owns the base
+# pin, while the build image must come from the reviewed current checkout.
+FROM ${OPENCLAW_VIKTOR_BUILD_IMAGE} AS viktor-build
+
 # OPENCLAW_BASE_IMAGE intentionally has no default. The manifest is the source of
 # the exact reviewed linux/amd64 tag-and-platform-digest reference.
 FROM ${OPENCLAW_BASE_IMAGE}
@@ -35,6 +40,7 @@ COPY deployment/telegram-media-gate/tools/ \
   /opt/openclaw-telegram-media-gate/deployment/tools/
 COPY deployment/telegram-media-gate/tests/runtime-media-clarification-smoke.mjs \
   /opt/openclaw-telegram-media-gate/deployment/tests/
+COPY --from=viktor-build --chown=node:node /app/dist/extensions/viktor-audiobooks/ /app/dist/extensions/viktor-audiobooks/
 
 RUN python3 /opt/openclaw-telegram-media-gate/deployment/tools/validate_base_image.py \
       --manifest /opt/openclaw-telegram-media-gate/deployment/deployment-manifest.json \

@@ -1,0 +1,66 @@
+{
+  "id": "viktor-audiobooks",
+  "name": "Viktor Audiobooks",
+  "description": "Deterministic Telegram audiobook requests through the private Audiobook Automation API.",
+  "activation": {
+    "onStartup": true
+  },
+  "contracts": {
+    "tools": ["create_book"]
+  },
+  "toolMetadata": {
+    "create_book": {
+      "optional": true
+    }
+  },
+  "configSchema": {
+    "type": "object",
+    "additionalProperties": false,
+    "required": [
+      "applicationBaseUrl",
+      "createReadToken",
+      "controlToken",
+      "actorDerivationSecret"
+    ],
+    "properties": {
+      "applicationBaseUrl": {
+        "type": "string",
+        "format": "uri",
+        "description": "Private Tailscale HTTP origin or optional private HTTPS origin for Audiobook Automation."
+      },
+      "tailnetOnlyHttp": {
+        "type": "boolean",
+        "default": false,
+        "description": "Required acknowledgement when applicationBaseUrl uses HTTP; deployment must restrict the route to Tailscale."
+      },
+      "createReadToken": {
+        "type": "string",
+        "minLength": 20
+      },
+      "controlToken": {
+        "type": "string",
+        "minLength": 20
+      },
+      "actorDerivationSecret": {
+        "type": "string",
+        "minLength": 32
+      },
+      "ownerNotificationTarget": {
+        "type": "string"
+      },
+      "ownerToolEnabled": {
+        "type": "boolean",
+        "default": true
+      }
+    }
+  },
+  "configContracts": {
+    "secretInputs": {
+      "paths": [
+        {"path": "createReadToken", "expected": "string"},
+        {"path": "controlToken", "expected": "string"},
+        {"path": "actorDerivationSecret", "expected": "string"}
+      ]
+    }
+  }
+}

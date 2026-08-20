@@ -1,0 +1,43 @@
+{
+  "schema_version": "1.0.0",
+  "collection_timestamp": "2026-08-19T23:17:06Z",
+  "collection": {
+    "methods": [
+      "docker buildx imagetools inspect",
+      "docker manifest inspect --verbose",
+      "docker pull --platform linux/amd64"
+    ],
+    "image_pulled": true,
+    "image_built": false,
+    "live_container_inspected": false,
+    "compose_service_changed": false
+  },
+  "registry": {
+    "repository": "ghcr.io/openclaw/openclaw",
+    "tag": "2026.7.1-2",
+    "tag_reference": "ghcr.io/openclaw/openclaw:2026.7.1-2",
+    "index": {
+      "media_type": "application/vnd.oci.image.index.v1+json",
+      "digest": "sha256:8789721d2e9b24b780a1504b56deb4c6bd5c7dbf96a1dd117e7c45c2ed72c8ac",
+      "descriptor_count": 4
+    },
+    "target_platform": {
+      "os": "linux",
+      "architecture": "amd64",
+      "matching_descriptor_count": 1
+    },
+    "platform_manifest": {
+      "media_type": "application/vnd.oci.image.manifest.v1+json",
+      "size": 5225,
+      "digest": "sha256:f56744f2cbd2c2477c739158fbc4cf594300aa535767a87da3bcd9cafa150160",
+      "independently_inspected": true
+    },
+    "approved_base_reference": "ghcr.io/openclaw/openclaw:2026.7.1-2@sha256:f56744f2cbd2c2477c739158fbc4cf594300aa535767a87da3bcd9cafa150160"
+  },
+  "digest_roles": {
+    "registry_index_digest": "multi-platform provenance; not the build pin",
+    "platform_manifest_digest": "exact linux/amd64 build pin",
+    "pre_upgrade_local_image_id": "sha256:142bc42a1333464142bb252e177bd5702f042f89645b7b22988c7f9d3e017bb2",
+    "pre_upgrade_local_image_id_role": "rollback evidence only; not an upstream registry digest"
+  }
+}

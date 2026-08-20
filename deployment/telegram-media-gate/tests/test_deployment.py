@@ -17,8 +17,10 @@ READINESS = TOOLS / "validate_readiness.py"
 DERIVE = TOOLS / "derive_evidence.py"
 VALIDATE_BASE = TOOLS / "validate_base_image.py"
 WRAPPER = DEPLOYMENT / "entrypoint.sh"
-EVIDENCE = DEPLOYMENT / "evidence/known-good-image-20260713T045521Z.json"
-REGISTRY_EVIDENCE = DEPLOYMENT / "evidence/registry-openclaw-2026.5.4-20260713T163330Z.json"
+EVIDENCE = DEPLOYMENT / "evidence/upstream-image-2026.7.1-2-20260819T231706Z.json"
+REGISTRY_EVIDENCE = DEPLOYMENT / "evidence/registry-openclaw-2026.7.1-2-20260819T231706Z.json"
+HISTORICAL_EVIDENCE = DEPLOYMENT / "evidence/known-good-image-20260713T045521Z.json"
+VALIDATION_EVIDENCE = DEPLOYMENT / "evidence/candidate-validation-2026.7.1-2-20260819T233511Z.json"
 DOCKERFILE = DEPLOYMENT.parents[1] / "Dockerfile.playwright-runtime"
 COMPOSE = DEPLOYMENT.parents[1] / "docker-compose.yml"
 YEAR_FIX_PROVENANCE = DEPLOYMENT / "provenance/year-clarification-refresh-2168d50.json"
@@ -75,13 +77,13 @@ class DeploymentFrameworkTests(unittest.TestCase):
         value = load_manifest(MANIFEST)
         fake_digest = "sha256:" + "a" * 64
         value["upstream_base_image"]["verified_manifest_digest"] = fake_digest
-        value["upstream_base_image"]["reference"] = "ghcr.io/openclaw/openclaw:2026.5.4@" + fake_digest
+        value["upstream_base_image"]["reference"] = "ghcr.io/openclaw/openclaw:2026.7.1-2@" + fake_digest
         value["version_probe"]["contract"] = {
             "kind": "json-file",
             "path": "package.json",
             "checks": [
                 {"field_path": ["name"], "expected": "openclaw"},
-                {"field_path": ["version"], "expected": "2026.5.4"},
+                {"field_path": ["version"], "expected": "2026.7.1"},
             ],
         }
         value["version_probe"]["evidence"] = {
@@ -92,6 +94,18 @@ class DeploymentFrameworkTests(unittest.TestCase):
         value["bundle"]["expected_path"] = expected_path
         value["bundle"]["original_sha256"] = sha(original if original is not None else self.original)
         value["bundle"]["patched_sha256"] = patched_hash or sha(self.patched)
+        value["bundle"]["structural_anchors"][1]["text"] = (
+            "\t\t\tawait processInboundMessage({\n"
+            "\t\t\t\tctx: event.ctx,\n"
+            "\t\t\t\tmsg: event.msg,\n"
+            "\t\t\t\tchatId: event.chatId,\n"
+            "\t\t\t\tresolvedThreadId,\n"
+            "\t\t\t\tdmThreadId,\n"
+            "\t\t\t\tstoreAllowFrom,\n"
+            "\t\t\t\tsendOversizeWarning: event.sendOversizeWarning,\n"
+            "\t\t\t\toversizeLogMessage: event.oversizeLogMessage\n"
+            "\t\t\t});"
+        )
         for entry, count in zip(value["bundle"]["structural_anchors"], anchor_counts):
             entry["expected_count"] = count
         path = self.root / f"manifest-{len(list(self.root.glob('manifest-*.json')))}.json"
@@ -544,6 +558,9 @@ class DeploymentFrameworkTests(unittest.TestCase):
             "SYNTHETIC_CHAT_ID",
             "mediaRequestUserIds: [MEDIA_ONLY_USER_ID]",
             "unknownResult.decision, 'ignore'",
+            "ownerNormalResult.decision, 'continue_normal'",
+            "restrictedResult.route, 'telegram_media_stub'",
+            "ownerMediaResult.reason, 'full_access_command'",
             "result.reason, 'media_request_user'",
             "assertSenderIdBoundaries",
             "assertNoSensitiveSurface",
@@ -642,7 +659,7 @@ class DeploymentFrameworkTests(unittest.TestCase):
             "/opt/openclaw-telegram-media-gate/deployment/tests/", dockerfile
         )
         runbook = RUNBOOK.read_text()
-        self.assertIn("This isolated source host has no Node runtime", runbook)
+        self.assertIn("network-disabled, read-only", runbook)
         self.assertIn("--network none", runbook)
         self.assertIn("--read-only", runbook)
         self.assertIn("--tmpfs /tmp:rw,nosuid,nodev,size=16m", runbook)
@@ -710,7 +727,7 @@ class DeploymentFrameworkTests(unittest.TestCase):
     def test_wrong_openclaw_package_name_is_rejected(self):
         self.bundle.write_bytes(self.original)
         (self.app / "package.json").write_text(
-            '{"name":"not-openclaw","version":"2026.5.4"}'
+            '{"name":"not-openclaw","version":"2026.7.1"}'
         )
         result = self.run_tool(PATCH, self.manifest())
         self.assertNotEqual(result.returncode, 0)
@@ -723,33 +740,33 @@ class DeploymentFrameworkTests(unittest.TestCase):
             set(evidence),
             {
                 "schema_version", "collection_timestamp", "collection", "image",
-                "version_probe", "bundle", "derivation", "upstream_base_image",
+                "version_probe", "bundle", "derivation",
             },
         )
         self.assertEqual(evidence["schema_version"], "1.0.0")
-        self.assertEqual(evidence["collection_timestamp"], "2026-07-13T04:55:21Z")
-        self.assertEqual(
-            evidence["collection"]["archive_sha256"],
-            "605c9098d8fbbe0750800244fe7aa778aa8ca79f6ed4a6a111b0a1726c91763a",
-        )
-        self.assertEqual(evidence["collection"]["evidence_file_hashes_verified"], 5085)
+        self.assertEqual(evidence["collection_timestamp"], "2026-08-19T23:17:06Z")
         self.assertFalse(evidence["collection"]["live_container_inspected"])
         self.assertFalse(evidence["collection"]["production_filesystem_inspected"])
         self.assertEqual(
-            evidence["image"]["local_image_id"],
-            "sha256:142bc42a1333464142bb252e177bd5702f042f89645b7b22988c7f9d3e017bb2",
+            evidence["image"]["platform_manifest_digest"],
+            manifest["upstream_base_image"]["verified_manifest_digest"],
         )
-        self.assertEqual(evidence["image"]["openclaw_version"], "2026.5.4")
+        self.assertEqual(evidence["image"]["release_tag"], "2026.7.1-2")
+        self.assertEqual(evidence["image"]["openclaw_version"], "2026.7.1")
+        self.assertEqual(evidence["image"]["node_version"], "v24.16.0")
         self.assertEqual(evidence["image"]["configured_user"], "node")
-        self.assertEqual(evidence["image"]["entrypoint"], ["docker-entrypoint.sh"])
+        self.assertEqual(evidence["image"]["entrypoint"], ["tini", "-s", "--"])
         self.assertEqual(
             evidence["image"]["command"],
-            ["node", "openclaw.mjs", "gateway", "--allow-unconfigured"],
+            ["node", "openclaw.mjs", "gateway"],
         )
         bundle = evidence["bundle"]
-        self.assertEqual(bundle["image_relative_path"], "dist/bot-D-7bCSXH.js")
+        self.assertEqual(
+            bundle["image_relative_path"],
+            "dist/telegram-ingress-spool-Dd3cDhXe.js",
+        )
         self.assertEqual(bundle["dist_relative_path"], manifest["bundle"]["expected_path"])
-        self.assertEqual(bundle["size_bytes"], 244956)
+        self.assertEqual(bundle["size_bytes"], 397941)
         self.assertEqual(bundle["original_sha256"], manifest["bundle"]["original_sha256"])
         self.assertEqual(bundle["patched_sha256"], manifest["bundle"]["patched_sha256"])
         self.assertEqual(
@@ -771,17 +788,20 @@ class DeploymentFrameworkTests(unittest.TestCase):
         )
         self.assertTrue(evidence["derivation"]["idempotent_second_pass"])
         self.assertEqual(
-            evidence["derivation"]["changed_files"], ["dist/bot-D-7bCSXH.js"]
+            evidence["derivation"]["changed_files"],
+            ["dist/telegram-ingress-spool-Dd3cDhXe.js"],
         )
         self.assertEqual(
             manifest["upstream_base_image"]["reference"],
-            "ghcr.io/openclaw/openclaw:2026.5.4@sha256:"
-            "69895e31e3c36030b465b364365e9a22160737b000a0712082c7278e18f80e56",
+            "ghcr.io/openclaw/openclaw:2026.7.1-2@sha256:"
+            "f56744f2cbd2c2477c739158fbc4cf594300aa535767a87da3bcd9cafa150160",
         )
         self.assertEqual(
             manifest["upstream_base_image"]["verified_manifest_digest"],
-            "sha256:69895e31e3c36030b465b364365e9a22160737b000a0712082c7278e18f80e56",
+            "sha256:f56744f2cbd2c2477c739158fbc4cf594300aa535767a87da3bcd9cafa150160",
         )
+        historical = json.loads(HISTORICAL_EVIDENCE.read_text())
+        self.assertEqual(historical["image"]["openclaw_version"], "2026.5.4")
 
     def test_evidence_derivation_matches_production_patcher(self):
         derive_dist = self.root / "derive-dist"
@@ -843,28 +863,18 @@ class DeploymentFrameworkTests(unittest.TestCase):
             {"schema_version", "collection_timestamp", "collection", "registry", "digest_roles"},
         )
         self.assertEqual(evidence["schema_version"], "1.0.0")
-        self.assertEqual(evidence["collection_timestamp"], "2026-07-13T16:33:30Z")
-        self.assertEqual(
-            evidence["collection"]["archive_sha256"],
-            "ab516262727b0e2e8440706674b77d39fd0297c6cf4c957bee3d4affd3259e10",
-        )
-        self.assertEqual(
-            evidence["collection"]["method"], "docker buildx imagetools inspect"
-        )
-        self.assertFalse(evidence["collection"]["image_pulled"])
+        self.assertEqual(evidence["collection_timestamp"], "2026-08-19T23:17:06Z")
+        self.assertTrue(evidence["collection"]["image_pulled"])
         self.assertFalse(evidence["collection"]["image_built"])
-        self.assertFalse(evidence["collection"]["container_changed"])
         self.assertFalse(evidence["collection"]["compose_service_changed"])
-        self.assertEqual(evidence["collection"]["nonself_evidence_hashes_verified"], 10)
-        self.assertFalse(evidence["collection"]["hash_manifest_self_entry"]["match"])
 
         registry = evidence["registry"]
-        index_digest = "sha256:7f4dfd4ed0d5469a4f12eccaa5f46b0c70fca802806be625dce782e69203e689"
-        platform_digest = "sha256:69895e31e3c36030b465b364365e9a22160737b000a0712082c7278e18f80e56"
-        approved = "ghcr.io/openclaw/openclaw:2026.5.4@" + platform_digest
+        index_digest = "sha256:8789721d2e9b24b780a1504b56deb4c6bd5c7dbf96a1dd117e7c45c2ed72c8ac"
+        platform_digest = "sha256:f56744f2cbd2c2477c739158fbc4cf594300aa535767a87da3bcd9cafa150160"
+        approved = "ghcr.io/openclaw/openclaw:2026.7.1-2@" + platform_digest
         self.assertEqual(registry["repository"], "ghcr.io/openclaw/openclaw")
-        self.assertEqual(registry["tag"], "2026.5.4")
-        self.assertEqual(registry["tag_reference"], "ghcr.io/openclaw/openclaw:2026.5.4")
+        self.assertEqual(registry["tag"], "2026.7.1-2")
+        self.assertEqual(registry["tag_reference"], "ghcr.io/openclaw/openclaw:2026.7.1-2")
         self.assertEqual(registry["index"]["digest"], index_digest)
         self.assertEqual(
             registry["index"]["media_type"], "application/vnd.oci.image.index.v1+json"
@@ -874,7 +884,7 @@ class DeploymentFrameworkTests(unittest.TestCase):
             {"os": "linux", "architecture": "amd64", "matching_descriptor_count": 1},
         )
         self.assertEqual(registry["platform_manifest"]["digest"], platform_digest)
-        self.assertEqual(registry["platform_manifest"]["size"], 4660)
+        self.assertEqual(registry["platform_manifest"]["size"], 5225)
         self.assertEqual(
             registry["platform_manifest"]["media_type"],
             "application/vnd.oci.image.manifest.v1+json",
@@ -891,12 +901,27 @@ class DeploymentFrameworkTests(unittest.TestCase):
         self.assertEqual(upstream["reference"], approved)
         self.assertEqual(
             upstream["evidence_record"],
-            "evidence/registry-openclaw-2026.5.4-20260713T163330Z.json",
+            "evidence/registry-openclaw-2026.7.1-2-20260819T231706Z.json",
         )
-        local_id = evidence["digest_roles"]["local_image_id"]
+        local_id = evidence["digest_roles"]["pre_upgrade_local_image_id"]
         self.assertEqual(local_id, upstream["local_known_good_image_id"])
         self.assertNotEqual(local_id, index_digest)
         self.assertNotEqual(local_id, platform_digest)
+
+    def test_candidate_validation_evidence_preserves_live_boundary(self):
+        evidence = json.loads(VALIDATION_EVIDENCE.read_text())
+        self.assertEqual(
+            evidence["candidate"]["image_id"],
+            "sha256:7551175300b8d84798e6250befaf0364e4ec11853611d4753a676c76887f383b",
+        )
+        self.assertEqual(evidence["proof"]["deployment_unit_tests"], {"passed": 33, "failed": 0})
+        self.assertEqual(evidence["proof"]["gateway_startup"]["container_health"], "healthy")
+        self.assertTrue(evidence["proof"]["gateway_startup"]["container_removed_after_proof"])
+        self.assertEqual(evidence["proof"]["compose_render"]["published_host_ips"], ["127.0.0.1", "127.0.0.1"])
+        self.assertFalse(evidence["proof"]["compose_render"]["privileged"])
+        self.assertFalse(evidence["live_system"]["gateway_container_inspected"])
+        self.assertFalse(evidence["live_system"]["gateway_container_changed"])
+        self.assertFalse(evidence["live_system"]["audiobook_plugin_registered"])
 
     def test_base_image_validation_rejects_missing_argument(self):
         result = self.run_base_validation()
@@ -904,25 +929,25 @@ class DeploymentFrameworkTests(unittest.TestCase):
         self.assertIn("--supplied-reference", result.stderr)
 
     def test_base_image_validation_rejects_tag_only_reference(self):
-        result = self.run_base_validation("ghcr.io/openclaw/openclaw:2026.5.4")
+        result = self.run_base_validation("ghcr.io/openclaw/openclaw:2026.7.1-2")
         self.assertNotEqual(result.returncode, 0)
         self.assertIn("must exactly equal", result.stderr)
 
     def test_base_image_validation_rejects_index_digest_reference(self):
         result = self.run_base_validation(
-            "ghcr.io/openclaw/openclaw:2026.5.4@sha256:"
-            "7f4dfd4ed0d5469a4f12eccaa5f46b0c70fca802806be625dce782e69203e689"
+            "ghcr.io/openclaw/openclaw:2026.7.1-2@sha256:"
+            "8789721d2e9b24b780a1504b56deb4c6bd5c7dbf96a1dd117e7c45c2ed72c8ac"
         )
         self.assertNotEqual(result.returncode, 0)
         self.assertIn("must exactly equal", result.stderr)
 
     def test_base_image_validation_rejects_wrong_repository_tag_or_digest(self):
         alternatives = [
-            "ghcr.io/not-openclaw/openclaw:2026.5.4@sha256:"
-            "69895e31e3c36030b465b364365e9a22160737b000a0712082c7278e18f80e56",
-            "ghcr.io/openclaw/openclaw:2026.5.5@sha256:"
-            "69895e31e3c36030b465b364365e9a22160737b000a0712082c7278e18f80e56",
-            "ghcr.io/openclaw/openclaw:2026.5.4@sha256:" + "b" * 64,
+            "ghcr.io/not-openclaw/openclaw:2026.7.1-2@sha256:"
+            "f56744f2cbd2c2477c739158fbc4cf594300aa535767a87da3bcd9cafa150160",
+            "ghcr.io/openclaw/openclaw:2026.7.1-3@sha256:"
+            "f56744f2cbd2c2477c739158fbc4cf594300aa535767a87da3bcd9cafa150160",
+            "ghcr.io/openclaw/openclaw:2026.7.1-2@sha256:" + "b" * 64,
         ]
         for reference in alternatives:
             with self.subTest(reference=reference):
@@ -990,7 +1015,7 @@ class DeploymentFrameworkTests(unittest.TestCase):
         local_id = manifest["upstream_base_image"]["local_known_good_image_id"]
         manifest["upstream_base_image"]["verified_manifest_digest"] = local_id
         manifest["upstream_base_image"]["reference"] = (
-            "ghcr.io/openclaw/openclaw:2026.5.4@" + local_id
+            "ghcr.io/openclaw/openclaw:2026.7.1-2@" + local_id
         )
         path = self.root / "local-id-manifest.json"
         path.write_text(json.dumps(manifest))

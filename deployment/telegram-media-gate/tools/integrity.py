@@ -5,7 +5,9 @@ import hashlib, json, pathlib, re
 from typing import Any
 
 SHA256_RE = re.compile(r"^[0-9a-f]{64}$")
-PINNED_IMAGE_RE = re.compile(r"^ghcr\.io/openclaw/openclaw:2026\.5\.4@sha256:[0-9a-f]{64}$")
+PINNED_IMAGE_RE = re.compile(
+    r"^ghcr\.io/openclaw/openclaw:(?P<tag>[0-9A-Za-z._-]+)@sha256:[0-9a-f]{64}$"
+)
 
 class IntegrityError(RuntimeError):
     pass
@@ -35,6 +37,7 @@ def _field(value: dict[str, Any], dotted: str) -> Any:
 
 def ensure_ready(manifest: dict[str, Any]) -> None:
     required = [
+        "expected_release_tag",
         "expected_openclaw_version",
         "upstream_base_image.registry_index_digest",
         "upstream_base_image.verified_manifest_digest",
@@ -66,8 +69,11 @@ def ensure_ready(manifest: dict[str, Any]) -> None:
     reference = _field(manifest, "upstream_base_image.reference")
     if not isinstance(digest, str) or not re.fullmatch(r"sha256:[0-9a-f]{64}", digest):
         raise IntegrityError("verified upstream manifest digest is malformed")
-    if not isinstance(reference, str) or not PINNED_IMAGE_RE.fullmatch(reference):
-        raise IntegrityError("upstream base-image reference is not the required pinned 2026.5.4 form")
+    match = PINNED_IMAGE_RE.fullmatch(reference) if isinstance(reference, str) else None
+    if match is None:
+        raise IntegrityError("upstream base-image reference is not an exact OpenClaw tag-and-digest pin")
+    if match.group("tag") != _field(manifest, "expected_release_tag"):
+        raise IntegrityError("base-image tag does not match expected release tag")
     if not reference.endswith("@" + digest):
         raise IntegrityError("base-image reference and verified digest disagree")
     index_digest = _field(manifest, "upstream_base_image.registry_index_digest")

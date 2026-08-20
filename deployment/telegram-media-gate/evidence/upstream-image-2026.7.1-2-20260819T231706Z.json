@@ -1,0 +1,58 @@
+{
+  "schema_version": "1.0.0",
+  "collection_timestamp": "2026-08-19T23:17:06Z",
+  "collection": {
+    "source": "controlled copy from a stopped container created from the exact linux/amd64 platform manifest",
+    "live_container_inspected": false,
+    "production_filesystem_inspected": false,
+    "networked_runtime_used": false
+  },
+  "image": {
+    "release_tag": "2026.7.1-2",
+    "platform_manifest_digest": "sha256:f56744f2cbd2c2477c739158fbc4cf594300aa535767a87da3bcd9cafa150160",
+    "openclaw_version": "2026.7.1",
+    "node_version": "v24.16.0",
+    "architecture": "amd64",
+    "os": "linux",
+    "working_directory": "/app",
+    "configured_user": "node",
+    "entrypoint": ["tini", "-s", "--"],
+    "command": ["node", "openclaw.mjs", "gateway"]
+  },
+  "version_probe": {
+    "probe_file": "/app/package.json",
+    "evidence_sha256": "0005244d0c40e00c6fbc1e2809e78f4d138d22633d6e5eabbe971cb70d2be04e",
+    "checks": [
+      {"field_path": ["name"], "expected": "openclaw"},
+      {"field_path": ["version"], "expected": "2026.7.1"}
+    ],
+    "release_tag_note": "The official correction image tag and OCI label are 2026.7.1-2; the packaged OpenClaw runtime version is 2026.7.1."
+  },
+  "bundle": {
+    "image_relative_path": "dist/telegram-ingress-spool-Dd3cDhXe.js",
+    "dist_relative_path": "telegram-ingress-spool-Dd3cDhXe.js",
+    "size_bytes": 397941,
+    "original_sha256": "5e5d822dc380afd59a408b2e012e41a741db76951f54f3eb1125fc174c166b37",
+    "patched_sha256": "b3919853ad6fa913baed6def5194a2ddf15b40465a7192735e94b2752edcc1d1",
+    "candidate_selector_counts": {
+      "const handleInboundMessageLike = async (event) => {": 1,
+      "await processInboundMessage({": 1,
+      "bot.on(\"message\", async (ctx) => {": 1,
+      "createTelegramBot": 4
+    },
+    "structural_anchors": [
+      {"name": "telegram_dedupe_helper", "expected_count": 1},
+      {"name": "inbound_message_handoff", "expected_count": 1}
+    ],
+    "upstream_media_gate_marker_count": 0
+  },
+  "derivation": {
+    "tool": "tools/derive_evidence.py",
+    "transform": "tools/integrity.py:render_patched_bytes",
+    "immutable_import_url": "file:///opt/openclaw-telegram-media-gate/scripts/telegram-media-gate.mjs",
+    "controlled_dist_file_count_before": 5937,
+    "controlled_dist_file_count_after": 5937,
+    "changed_files": ["dist/telegram-ingress-spool-Dd3cDhXe.js"],
+    "idempotent_second_pass": true
+  }
+}

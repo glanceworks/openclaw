@@ -1,40 +1,47 @@
 # Telegram media-gate deployment preparation
 
-This directory contains immutable runtime assets exported from reviewed commits,
-a fail-closed deployment manifest, deterministic build-time patching, read-only
-startup verification, synthetic fixtures, and the manual operator runbook.
+This directory contains immutable Viktor media runtime assets, a fail-closed
+deployment manifest, deterministic build-time patching, startup verification,
+offline behavior fixtures, current OCI evidence, and the owner runbook.
 
-The reviewed source manifest is complete and the readiness validator now passes.
-No image has been built. Readiness means only that an explicitly authorized
-operator may proceed after preserving the rollback image. The approved
-`linux/amd64` base reference is
-`ghcr.io/openclaw/openclaw:2026.5.4@sha256:69895e31e3c36030b465b364365e9a22160737b000a0712082c7278e18f80e56`.
-The Dockerfile requires `OPENCLAW_BASE_IMAGE` to equal that manifest-owned
-reference exactly before readiness validation or patching can complete.
+The active target is the official OpenClaw correction image `2026.7.1-2` for
+`linux/amd64`:
+
+`ghcr.io/openclaw/openclaw:2026.7.1-2@sha256:f56744f2cbd2c2477c739158fbc4cf594300aa535767a87da3bcd9cafa150160`
+
+The tag resolves through OCI index
+`sha256:8789721d2e9b24b780a1504b56deb4c6bd5c7dbf96a1dd117e7c45c2ed72c8ac`.
+The index is provenance; only the platform-manifest digest is an approved build
+pin. The OCI tag and label are `2026.7.1-2`, while the packaged OpenClaw CLI and
+`package.json` version are `2026.7.1`; readiness validates both identities.
+
+The reviewed target bundle is `telegram-ingress-spool-Dd3cDhXe.js`. Its content
+selector and both full structural anchors resolve exactly once. The upstream
+handoff gained policy, dedupe, and prompt-boundary fields since `2026.5.4`, so
+the handoff anchor was refreshed without changing the insertion behavior. The
+immutable media-gate import remains
+`file:///opt/openclaw-telegram-media-gate/scripts/telegram-media-gate.mjs`.
 
 Runtime executable code is copied to `/opt/openclaw-telegram-media-gate`.
 Mutable media configuration and state continue to use the configured data root;
-the generated OpenClaw bundle never imports executable code from that root.
+the generated bundle never imports executable code from that mutable root.
 
-Run the package-independent fixture suite with:
+Run source readiness checks with:
 
 ```bash
 python3 -m unittest discover \
   -s deployment/telegram-media-gate/tests \
   -p 'test_*.py' \
   -v
+
+python3 deployment/telegram-media-gate/tools/validate_readiness.py \
+  --manifest deployment/telegram-media-gate/deployment-manifest.json \
+  --runtime-root deployment/telegram-media-gate \
+  --source-layout
 ```
 
-The registry index digest identifies the multi-platform index; it is retained as
-provenance but is not the build pin. The selected `linux/amd64` platform-manifest
-digest is the build pin. The known-good local image ID recorded in `RUNBOOK.md`
-is rollback evidence for the local host only and is neither registry digest.
-Explicit manual authorization is still required, and a durable rollback tag must
-be recorded before the first build.
-
-The pinned upstream OpenClaw `2026.5.4` image was observed with
-`Config.Cmd = null`. The custom image therefore explicitly defines
-`node openclaw.mjs gateway --allow-unconfigured`. Its guarded entrypoint verifies
-the built image and delegates with `exec docker-entrypoint.sh "$@"`. Compose
-intentionally does not override the command, leaving the image with a complete,
-inspectable command contract.
+The previous `2026.5.4` evidence files remain historical rollback provenance and
+are not consumed by current readiness. A candidate image and controlled smoke
+proof do not authorize live deployment. See `RUNBOOK.md`; owner approval is
+required before any live build, recreation, plugin registration, or `/book`
+canary.

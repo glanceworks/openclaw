@@ -1,4 +1,25 @@
-# Known-good image evidence review
+# Telegram media-gate image evidence
+
+The active deployment target is documented in
+`registry-openclaw-2026.7.1-2-20260819T231706Z.json` and
+`upstream-image-2026.7.1-2-20260819T231706Z.json`. The reviewed linux/amd64
+platform bundle is `dist/telegram-ingress-spool-Dd3cDhXe.js`; its original
+SHA-256 is `5e5d822dc380afd59a408b2e012e41a741db76951f54f3eb1125fc174c166b37`
+and its deterministic patched SHA-256 is
+`b3919853ad6fa913baed6def5194a2ddf15b40465a7192735e94b2752edcc1d1`.
+Both structural anchors occur exactly once, the content selector identifies
+exactly one bundle, and the derivation changes only that file.
+
+`candidate-validation-2026.7.1-2-20260819T233511Z.json` records the local
+candidate build, final image identity, controlled gateway health proof, complete
+offline media behavior smoke, and rendered Compose security posture. The
+candidate container used no network or published ports and was removed after
+proof; the live Viktor service was not inspected or changed.
+
+The official correction tag is `2026.7.1-2`; the packaged runtime version is
+`2026.7.1`. Current readiness validates both identities independently.
+
+## Historical 2026.5.4 evidence
 
 This record summarizes evidence collected at `2026-07-13T04:55:21Z` from a
 disposable stopped container created from local image

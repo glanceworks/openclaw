@@ -1,0 +1,78 @@
+{
+  "schema_version": "1.0.0",
+  "recorded_at": "2026-08-20T07:28:25Z",
+  "milestone": "viktor-audiobooks bundled refresh edit validated live",
+  "deployment": {
+    "service": "openclaw-gateway",
+    "result": "passed",
+    "health": "healthy",
+    "live_image": {
+      "tag": "openclaw-local:viktor-audiobooks-service-editfix-20260820",
+      "image_id": "sha256:c59d245c56dc686b307be776a4a966e4359d51cff450dffd1816966f728e59ae"
+    },
+    "rollback_image": {
+      "tag": "openclaw-local:viktor-audiobooks-rollback-before-service-editfix-20260820",
+      "image_id": "sha256:441a301b9ee272b3dd36cdf7f76482abba491c6d59f75c35dfc2761d5506642a"
+    }
+  },
+  "plugin": {
+    "id": "viktor-audiobooks",
+    "artifact_directory": "/app/dist/extensions/viktor-audiobooks",
+    "artifact_files_present": [
+      "index.js",
+      "openclaw.plugin.json"
+    ],
+    "runtime_inspection": {
+      "origin": "bundled",
+      "status": "loaded",
+      "source": "/app/dist/extensions/viktor-audiobooks/index.js"
+    }
+  },
+  "request": {
+    "id": "beba7972-4dc0-4523-a303-02d90f6336dd",
+    "title": "Onyx Storm",
+    "author": "Rebecca Yarros",
+    "existing_request_reused": true,
+    "new_request_created": false
+  },
+  "owner_canary": {
+    "evidence_source": "owner-reported Telegram observation",
+    "command": "/book status",
+    "result": "passed",
+    "existing_message_updated_in_place": true,
+    "rendered_card": {
+      "audiobook": "onyx storm",
+      "author": "rebecca yarros",
+      "status": "Waiting for input",
+      "step": "Choose an edition",
+      "progress": "Waiting for input"
+    },
+    "release_selection_controls_rendered": true,
+    "release_selected": false,
+    "get_this_book_pressed": false,
+    "acquisition_started": false
+  },
+  "validation": {
+    "bundled_plugin_artifact": "passed",
+    "plugin_runtime_inspection": "passed",
+    "gateway_health": "passed",
+    "telegram_startup": "passed",
+    "owner_status_refresh": "passed"
+  },
+  "remaining_items": [
+    "Release button labels are truncated and may need UX polish.",
+    "The acquisition flow has not been tested.",
+    "Get this book has not been pressed."
+  ],
+  "next_recommended_canary": {
+    "requires_explicit_owner_authorization": true,
+    "step": "Select one intended release, verify the selected state and separate Get this book confirmation, then stop before pressing Get this book."
+  },
+  "safety": {
+    "application_code_changed": false,
+    "configuration_changed": false,
+    "deployment_changed_during_evidence_capture": false,
+    "live_container_changed_during_evidence_capture": false,
+    "secrets_or_transport_identifiers_recorded": false
+  }
+}

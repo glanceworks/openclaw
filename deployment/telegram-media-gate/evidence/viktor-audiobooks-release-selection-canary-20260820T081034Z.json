@@ -1,0 +1,61 @@
+{
+  "schema_version": "1.0.0",
+  "recorded_at": "2026-08-20T08:10:34Z",
+  "milestone": "viktor-audiobooks release-selection callback validated live",
+  "deployment_state": {
+    "live_deployment_healthy": true,
+    "deployment_changed_during_evidence_capture": false
+  },
+  "request": {
+    "id": "beba7972-4dc0-4523-a303-02d90f6336dd",
+    "title": "Onyx Storm",
+    "existing_request_reused": true,
+    "new_request_created": false
+  },
+  "selected_candidate": {
+    "evidence_source": "owner-reported Telegram observation",
+    "title": "Rebecca Yarros - Empyrean Book 3 - Onyx Storm (2025)",
+    "candidate_id": null,
+    "candidate_id_note": "The numeric candidate ID was not included in the captured canary evidence."
+  },
+  "owner_canary": {
+    "action": "release-selection",
+    "result": "passed",
+    "callback_delivery": "passed",
+    "opaque_callback_envelope": "vab:<redacted-token>",
+    "opaque_callback_handling": "passed",
+    "actor_chat_message_binding": "passed",
+    "release_selection_control_api": "passed",
+    "selected_release_persistence": "passed",
+    "resulting_state": {
+      "observed_state": "Get this book confirmation",
+      "request_status": null,
+      "job_stage": null,
+      "job_status": null,
+      "backend_state_note": "Exact request and job field values were not captured; the successful callback and rendered Get this book control prove the confirmation-state transition."
+    }
+  },
+  "acquisition": {
+    "get_this_book_pressed": false,
+    "authorization_control_invoked": false,
+    "acquisition_started": false
+  },
+  "remaining_ux_issue": {
+    "summary": "The confirmation card does not visibly display the selected release.",
+    "impact": "A user cannot confidently verify what Get this book will acquire.",
+    "fixed_in_this_task": false
+  },
+  "next_recommended_canary": {
+    "requires_explicit_owner_authorization": true,
+    "step": "After the confirmation-card UX identifies the selected release, press Get this book once and validate the acquisition transition.",
+    "current_stop_boundary": "Do not press Get this book."
+  },
+  "safety": {
+    "application_code_changed": false,
+    "configuration_changed": false,
+    "deployment_changed": false,
+    "live_container_changed": false,
+    "release_selection_repeated": false,
+    "secrets_or_transport_identifiers_recorded": false
+  }
+}
