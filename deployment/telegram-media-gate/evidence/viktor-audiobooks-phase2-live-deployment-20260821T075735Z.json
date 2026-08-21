@@ -1,0 +1,16 @@
+{
+  "deployment": {
+    "image": "openclaw-local:viktor-phase2-77185f72fca",
+    "image_id": "sha256:5fe61ebe14f630cf96a8aa6058ee85b958264d054ab4f49ce2f9334710d13ffd",
+    "container": "openclaw-openclaw-gateway-1",
+    "status": "running",
+    "health": "healthy"
+  },
+  "viktor_plugin_validation": {
+    "status": "enabled",
+    "validation_output": "  origin: bundled\n  version: 2026.7.1\n\nViktor Audiobooks (viktor-audiobooks) enabled\n  format: openclaw\n  source: /app/dist/extensions/viktor-audiobooks/index.js\n  origin: bundled\n  version: 2026.7.1\n\n@openclaw/vllm-provider (vllm) enabled\n  format: openclaw\n  source: /app/dist/extensions/vllm/index.js\n"
+  },
+  "rollback": {
+    "previous_image": "openclaw-local:viktor-audiobooks-service-editfix-20260820"
+  }
+}
