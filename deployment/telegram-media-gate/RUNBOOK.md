@@ -10,8 +10,10 @@ modify Synology.
 ## Reviewed identities
 
 - Branch: `viktor-acquisition-flow`
-- Reviewed Phase 2 source HEAD:
-  `4973915d6bd3cb8d1697a793b07c64cc7859a9a3`
+- Reviewed Phase 2 application HEAD:
+  `54b36e5957ca3a353c7437b4ef2b07e18a50e068`
+- Reviewed Phase 2 candidate source HEAD:
+  `c8474d0738037d15516dcfbe86c0f3fffcb4699a`
 - Reviewed flow: selecting an edition invokes the Viktor release-acquisition
   callback directly; the separate `Get this book` step is not part of Phase 2.
 - Release tag: `v2026.7.1-2`
@@ -27,6 +29,11 @@ modify Synology.
 The official image tag/label is `2026.7.1-2`; `openclaw --version` and
 `/app/package.json` report `2026.7.1`. Candidate behavior validation uses a
 network-disabled, read-only container with only a disposable `/tmp` tmpfs.
+
+The reviewed source revision is the immutable commit exported into the Docker
+build context. The provenance/evidence revision is the later commit containing
+the runbook and records that describe the build. It may descend from the
+reviewed source revision and must not be required to have the same commit ID.
 
 ## Completed local Phase 2 validation
 
@@ -75,19 +82,27 @@ reassess migration before a public rollout with historical user cards.
 
 ## Build and validate the Phase 2 candidate
 
-Run from the Viktor checkout. The reviewed extension list is intentionally
-limited to `viktor-audiobooks`; do not add another extension without a new
-review. Replace only the timestamp in `ROLLBACK_TAG` if desired. This section
-builds and inspects images but does not recreate the gateway.
+Run from a clean `viktor-acquisition-flow` checkout containing this procedure.
+Before running the block, export `REVIEWED_HEAD` as the immutable reviewed
+candidate source revision. The procedure requires the expected full commit ID,
+allows only later runbook/evidence changes, and creates a detached worktree so
+both Docker builds receive the exact reviewed source tree. The reviewed
+extension list is intentionally limited to `viktor-audiobooks`; do not add
+another extension without a new review. Replace only the timestamp in
+`ROLLBACK_TAG` if desired. This section builds and inspects images but does not
+recreate the gateway.
 
 ```bash
 set -euo pipefail
 
 export REVIEWED_BRANCH='viktor-acquisition-flow'
-export REVIEWED_HEAD='4973915d6bd3cb8d1697a793b07c64cc7859a9a3'
+export EXPECTED_REVIEWED_HEAD='c8474d0738037d15516dcfbe86c0f3fffcb4699a'
 export REVIEWED_EXTENSIONS='viktor-audiobooks'
 export TARGET_PLATFORM='linux/amd64'
 export OPENCLAW_BASE_IMAGE='ghcr.io/openclaw/openclaw:2026.7.1-2@sha256:f56744f2cbd2c2477c739158fbc4cf594300aa535767a87da3bcd9cafa150160'
+: "${REVIEWED_HEAD:?export REVIEWED_HEAD as the reviewed candidate source SHA}"
+test "$REVIEWED_HEAD" = "$EXPECTED_REVIEWED_HEAD"
+printf '%s\n' "$REVIEWED_HEAD" | grep -Eq '^[0-9a-f]{40}$'
 export OPENCLAW_VIKTOR_BUILD_IMAGE="openclaw-local:viktor-build-${REVIEWED_HEAD}"
 export CANDIDATE_TAG="openclaw-local:viktor-phase2-${REVIEWED_HEAD}"
 export ROLLBACK_TAG='openclaw-local:viktor-pre-2026.7.1-2-20260819'
@@ -95,8 +110,33 @@ export ROLLBACK_TAG='openclaw-local:viktor-pre-2026.7.1-2-20260819'
 git status -sb
 test -z "$(git status --porcelain)"
 test "$(git branch --show-current)" = "$REVIEWED_BRANCH"
-test "$(git rev-parse HEAD)" = "$REVIEWED_HEAD"
-git merge-base --is-ancestor v2026.7.1-2 HEAD
+PROVENANCE_HEAD="$(git rev-parse HEAD)"
+test "$(git rev-parse --verify "${REVIEWED_HEAD}^{commit}")" = "$REVIEWED_HEAD"
+git merge-base --is-ancestor v2026.7.1-2 "$REVIEWED_HEAD"
+git merge-base --is-ancestor "$REVIEWED_HEAD" "$PROVENANCE_HEAD"
+
+NON_PROVENANCE_CHANGES="$(
+  git diff --name-only "$REVIEWED_HEAD..$PROVENANCE_HEAD" -- . \
+    ':(exclude)deployment/telegram-media-gate/RUNBOOK.md' \
+    ':(exclude)deployment/telegram-media-gate/evidence/**'
+)"
+test -z "$NON_PROVENANCE_CHANGES"
+
+BUILD_CONTEXT_ROOT="$(mktemp -d)"
+BUILD_CONTEXT="$BUILD_CONTEXT_ROOT/reviewed-source"
+cleanup_build_context() {
+  if test -d "$BUILD_CONTEXT"; then
+    git worktree remove "$BUILD_CONTEXT"
+  fi
+  if test -d "$BUILD_CONTEXT_ROOT"; then
+    rmdir "$BUILD_CONTEXT_ROOT"
+  fi
+}
+trap cleanup_build_context EXIT
+
+git worktree add --detach "$BUILD_CONTEXT" "$REVIEWED_HEAD"
+test "$(git -C "$BUILD_CONTEXT" rev-parse HEAD)" = "$REVIEWED_HEAD"
+test -z "$(git -C "$BUILD_CONTEXT" status --porcelain)"
 
 RUNNING_CONTAINER_ID="$(docker compose ps -q openclaw-gateway)"
 RUNNING_IMAGE_ID="$(docker inspect --format '{{.Image}}' "$RUNNING_CONTAINER_ID")"
@@ -110,7 +150,7 @@ docker build --pull=false \
   --build-arg "OPENCLAW_EXTENSIONS=$REVIEWED_EXTENSIONS" \
   --label "org.opencontainers.image.revision=$REVIEWED_HEAD" \
   --tag "$OPENCLAW_VIKTOR_BUILD_IMAGE" \
-  .
+  "$BUILD_CONTEXT"
 
 test "$(docker image inspect --format '{{.Architecture}}' "$OPENCLAW_VIKTOR_BUILD_IMAGE")" = \
   'amd64'
@@ -125,7 +165,12 @@ DOCKER_DEFAULT_PLATFORM="$TARGET_PLATFORM" \
 OPENCLAW_BASE_IMAGE="$OPENCLAW_BASE_IMAGE" \
 OPENCLAW_VIKTOR_BUILD_IMAGE="$OPENCLAW_VIKTOR_BUILD_IMAGE" \
 OPENCLAW_IMAGE="$CANDIDATE_TAG" \
-docker compose build --pull=false openclaw-gateway
+docker compose -f docker-compose.yml -f - build --pull=false openclaw-gateway <<EOF
+services:
+  openclaw-gateway:
+    build:
+      context: "$BUILD_CONTEXT"
+EOF
 
 test "$(docker image inspect --format '{{.Architecture}}' "$CANDIDATE_TAG")" = 'amd64'
 test "$(docker image inspect --format '{{.Config.User}}' "$CANDIDATE_TAG")" = 'node'
@@ -158,6 +203,9 @@ docker run --rm --network none --read-only \
   -e OPENCLAW_TELEGRAM_MEDIA_RUNTIME_ROOT=/opt/openclaw-telegram-media-gate/scripts \
   --entrypoint node "$CANDIDATE_TAG" \
   /opt/openclaw-telegram-media-gate/deployment/tests/runtime-media-clarification-smoke.mjs
+
+trap - EXIT
+cleanup_build_context
 ```
 
 ## Record fresh Phase 2 candidate evidence
@@ -169,8 +217,10 @@ proof for this candidate.
 
 The fresh evidence must record:
 
-- branch `viktor-acquisition-flow` and reviewed HEAD
-  `4973915d6bd3cb8d1697a793b07c64cc7859a9a3`;
+- branch `viktor-acquisition-flow`, reviewed application HEAD
+  `54b36e5957ca3a353c7437b4ef2b07e18a50e068`, reviewed candidate source HEAD
+  `c8474d0738037d15516dcfbe86c0f3fffcb4699a`, and the provenance HEAD from
+  which the procedure was run;
 - the exact immutable `OPENCLAW_BASE_IMAGE`, reviewed extension list, donor
   image tag and ID, candidate tag, and candidate image ID;
 - SHA-256 results for the bundled Viktor `index.js` and
@@ -196,7 +246,7 @@ approved activation. Keep the reviewed values from the build section unchanged.
 ```bash
 set -euo pipefail
 
-export REVIEWED_HEAD='4973915d6bd3cb8d1697a793b07c64cc7859a9a3'
+export REVIEWED_HEAD='c8474d0738037d15516dcfbe86c0f3fffcb4699a'
 export OPENCLAW_BASE_IMAGE='ghcr.io/openclaw/openclaw:2026.7.1-2@sha256:f56744f2cbd2c2477c739158fbc4cf594300aa535767a87da3bcd9cafa150160'
 export OPENCLAW_VIKTOR_BUILD_IMAGE="openclaw-local:viktor-build-${REVIEWED_HEAD}"
 export CANDIDATE_TAG="openclaw-local:viktor-phase2-${REVIEWED_HEAD}"
@@ -216,7 +266,7 @@ Persistent `/home/node/.openclaw` and workspace bind mounts are reused unchanged
 ```bash
 set -euo pipefail
 
-export REVIEWED_HEAD='4973915d6bd3cb8d1697a793b07c64cc7859a9a3'
+export REVIEWED_HEAD='c8474d0738037d15516dcfbe86c0f3fffcb4699a'
 export OPENCLAW_BASE_IMAGE='ghcr.io/openclaw/openclaw:2026.7.1-2@sha256:f56744f2cbd2c2477c739158fbc4cf594300aa535767a87da3bcd9cafa150160'
 export OPENCLAW_VIKTOR_BUILD_IMAGE="openclaw-local:viktor-build-${REVIEWED_HEAD}"
 export OPENCLAW_IMAGE="openclaw-local:viktor-phase2-${REVIEWED_HEAD}"
@@ -260,7 +310,7 @@ set -euo pipefail
 export ROLLBACK_TAG='openclaw-local:viktor-pre-2026.7.1-2-20260819'
 export OPENCLAW_IMAGE="$ROLLBACK_TAG"
 export OPENCLAW_BASE_IMAGE='ghcr.io/openclaw/openclaw:2026.7.1-2@sha256:f56744f2cbd2c2477c739158fbc4cf594300aa535767a87da3bcd9cafa150160'
-export OPENCLAW_VIKTOR_BUILD_IMAGE='openclaw-local:viktor-build-4973915d6bd3cb8d1697a793b07c64cc7859a9a3'
+export OPENCLAW_VIKTOR_BUILD_IMAGE='openclaw-local:viktor-build-c8474d0738037d15516dcfbe86c0f3fffcb4699a'
 
 test "$(docker image inspect --format '{{.Id}}' "$ROLLBACK_TAG")" = \
   'sha256:142bc42a1333464142bb252e177bd5702f042f89645b7b22988c7f9d3e017bb2'
