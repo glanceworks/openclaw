@@ -8,6 +8,9 @@ FROM ${OPENCLAW_VIKTOR_BUILD_IMAGE} AS viktor-build
 # the exact reviewed linux/amd64 tag-and-platform-digest reference.
 FROM ${OPENCLAW_BASE_IMAGE}
 ARG OPENCLAW_BASE_IMAGE
+ARG OPENCLAW_IMAGE_REVISION
+
+LABEL org.opencontainers.image.revision=$OPENCLAW_IMAGE_REVISION
 
 USER root
 

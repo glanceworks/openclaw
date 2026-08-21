@@ -163,6 +163,7 @@ test "$(
 
 DOCKER_DEFAULT_PLATFORM="$TARGET_PLATFORM" \
 OPENCLAW_BASE_IMAGE="$OPENCLAW_BASE_IMAGE" \
+OPENCLAW_IMAGE_REVISION="$REVIEWED_HEAD" \
 OPENCLAW_VIKTOR_BUILD_IMAGE="$OPENCLAW_VIKTOR_BUILD_IMAGE" \
 OPENCLAW_IMAGE="$CANDIDATE_TAG" \
 docker compose -f docker-compose.yml -f - build --pull=false openclaw-gateway <<EOF
@@ -181,6 +182,12 @@ test "$(docker image inspect --format '{{json .Config.Entrypoint}}' "$CANDIDATE_
   '["/opt/openclaw-telegram-media-gate/deployment/entrypoint.sh"]'
 test "$(docker image inspect --format '{{json .Config.Cmd}}' "$CANDIDATE_TAG")" = \
   '["node","openclaw.mjs","gateway","--allow-unconfigured"]'
+test "$(
+  docker image inspect \
+    --format '{{index .Config.Labels "org.opencontainers.image.revision"}}' \
+    "$CANDIDATE_TAG"
+)" = \
+  "$REVIEWED_HEAD"
 
 docker run --rm --network none --entrypoint node "$CANDIDATE_TAG" --version
 docker run --rm --network none --entrypoint node "$CANDIDATE_TAG" -p \
