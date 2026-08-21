@@ -1,13 +1,11 @@
 import { randomUUID } from "node:crypto";
-
 import type {
   OpenClawPluginApi,
   PluginCommandContext,
   PluginCommandResult,
 } from "openclaw/plugin-sdk/core";
-
-import { ApplicationApi, ApplicationApiError } from "./api-client.js";
 import { deriveActor, timingSafeActorEqual } from "./actor.js";
+import { ApplicationApi, ApplicationApiError } from "./api-client.js";
 import {
   bindCallbackMessage,
   renderCard,
@@ -93,13 +91,8 @@ export function parseBookCommand(rawArgs: string): ParsedBookCommand {
 }
 
 export function directTelegramRoute(ctx: PluginCommandContext): Route | null {
-  if (
-    ctx.channel !== "telegram" ||
-    !ctx.from ||
-    !ctx.to ||
-    !ctx.senderId ||
-    ctx.from !== ctx.to
-  ) return null;
+  if (ctx.channel !== "telegram" || !ctx.from || !ctx.to || !ctx.senderId || ctx.from !== ctx.to)
+    return null;
   const chatMatch = /^telegram:([1-9][0-9]*)$/u.exec(ctx.to);
   const senderMatch = /^(?:telegram:)?([1-9][0-9]*)$/u.exec(ctx.senderId);
   if (!chatMatch?.[1] || chatMatch[1] !== senderMatch?.[1]) return null;
@@ -120,9 +113,9 @@ export function callbackMatchesIntent(params: {
   const { intent, actor, chatId, messageId, threadId } = params;
   return Boolean(
     timingSafeActorEqual(intent.actor, actor) &&
-      intent.route.chatId === chatId &&
-      intent.messageId === messageId &&
-      intent.route.threadId === threadId,
+    intent.route.chatId === chatId &&
+    intent.messageId === messageId &&
+    intent.route.threadId === threadId,
   );
 }
 
@@ -182,17 +175,22 @@ export class ViktorAudiobookController {
     }
     if (parsed.kind === "status" || parsed.kind === "cancel") {
       const refreshed = await this.refreshActorBindings(actor, true);
-      const suffix = parsed.kind === "cancel"
-        ? " Use a request-specific Cancel button when it is available."
-        : "";
-      return { text: `Refreshed ${refreshed} active audiobook request card${refreshed === 1 ? "" : "s"}.${suffix}` };
+      const suffix =
+        parsed.kind === "cancel"
+          ? " Use a request-specific Cancel button when it is available."
+          : "";
+      return {
+        text: `Refreshed ${refreshed} active audiobook request card${refreshed === 1 ? "" : "s"}.${suffix}`,
+      };
     }
 
     try {
       await this.createAndPost(actor, parsed.title, parsed.author, route);
       return { suppressReply: true };
     } catch (error) {
-      this.api.logger.warn(`viktor-audiobooks: create/card delivery failed (${safeFailureText(error)})`);
+      this.api.logger.warn(
+        `viktor-audiobooks: create/card delivery failed (${safeFailureText(error)})`,
+      );
       return { text: safeFailureText(error), isError: true };
     }
   }
@@ -269,6 +267,7 @@ export class ViktorAudiobookController {
       await this.editFromCallback(ctx, actor, updated);
       return { handled: true };
     } catch (error) {
+      this.api.logger.error(`viktor-audiobooks callback failed: ${String(error)}`);
       await ctx.respond.reply({ text: safeFailureText(error) });
       return { handled: true };
     }
@@ -313,7 +312,12 @@ export class ViktorAudiobookController {
     }
   }
 
-  private async createAndPost(actor: string, title: string, author: string, route: Route): Promise<void> {
+  private async createAndPost(
+    actor: string,
+    title: string,
+    author: string,
+    route: Route,
+  ): Promise<void> {
     const idempotencyKey = `tg-create-${randomUUID()}`;
     const intent: CreateIntent = {
       idempotencyKey,
