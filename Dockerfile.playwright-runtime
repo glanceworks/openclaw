@@ -43,6 +43,7 @@ COPY deployment/telegram-media-gate/tools/ \
   /opt/openclaw-telegram-media-gate/deployment/tools/
 COPY deployment/telegram-media-gate/tests/runtime-media-clarification-smoke.mjs \
   /opt/openclaw-telegram-media-gate/deployment/tests/
+COPY --from=viktor-build --chown=node:node /app/extensions/viktor-audiobooks/ /app/extensions/viktor-audiobooks/
 COPY --from=viktor-build --chown=node:node /app/dist/extensions/viktor-audiobooks/ /app/dist/extensions/viktor-audiobooks/
 
 RUN python3 /opt/openclaw-telegram-media-gate/deployment/tools/validate_base_image.py \
