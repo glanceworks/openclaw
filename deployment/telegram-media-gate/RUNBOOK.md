@@ -80,6 +80,26 @@ Create the fresh Phase 2 canary only after the old request is terminal. This
 pre-production reset replaces migration machinery for this controlled rollout;
 reassess migration before a public rollout with historical user cards.
 
+## Bundled extension packaging contract
+
+OpenClaw discovers a bundled extension from its package metadata and plugin
+manifest. Compiled artifacts alone are insufficient for runtime discovery.
+Each bundled extension must provide:
+
+- `extensions/<plugin>/package.json`;
+- `extensions/<plugin>/openclaw.plugin.json`;
+- an `openclaw.extensions` entry in `package.json` that declares the extension
+  entrypoint, such as `./index.ts`;
+- the source extension package at `/app/extensions/<plugin>` in the candidate
+  image; and
+- the compiled runtime package at `/app/dist/extensions/<plugin>` in the
+  candidate image.
+
+For Viktor, preserve `package.json` and `openclaw.plugin.json` in the source
+package and preserve `package.json`, `openclaw.plugin.json`, and `index.js` in
+the compiled package. An image containing only the compiled `index.js` and
+plugin manifest does not satisfy the discovery contract.
+
 ## Build and validate the Phase 2 candidate
 
 Run from a clean `viktor-acquisition-flow` checkout containing this procedure.
@@ -193,7 +213,12 @@ docker run --rm --network none --entrypoint node "$CANDIDATE_TAG" --version
 docker run --rm --network none --entrypoint node "$CANDIDATE_TAG" -p \
   'require("./package.json").name + " " + require("./package.json").version'
 
-for artifact in index.js openclaw.plugin.json; do
+for artifact in package.json openclaw.plugin.json; do
+  docker run --rm --network none --entrypoint test "$CANDIDATE_TAG" \
+    -f "/app/extensions/viktor-audiobooks/$artifact"
+done
+
+for artifact in package.json index.js openclaw.plugin.json; do
   VIKTOR_BUILD_SHA="$(
     docker run --rm --network none --entrypoint sha256sum \
       "$OPENCLAW_VIKTOR_BUILD_IMAGE" \
@@ -207,6 +232,18 @@ for artifact in index.js openclaw.plugin.json; do
   test -n "$VIKTOR_BUILD_SHA"
   test "$CANDIDATE_VIKTOR_SHA" = "$VIKTOR_BUILD_SHA"
 done
+
+VIKTOR_PLUGIN_LIST="$(
+  docker run --rm --network none --read-only \
+    --tmpfs /tmp:rw,nosuid,nodev,size=16m \
+    --entrypoint node "$CANDIDATE_TAG" \
+    openclaw.mjs plugins list --enabled --verbose
+)"
+printf '%s\n' "$VIKTOR_PLUGIN_LIST"
+printf '%s\n' "$VIKTOR_PLUGIN_LIST" | grep -F 'Viktor Audiobooks (viktor-audiobooks) enabled'
+printf '%s\n' "$VIKTOR_PLUGIN_LIST" | grep -F '  origin: bundled'
+printf '%s\n' "$VIKTOR_PLUGIN_LIST" | \
+  grep -F '  source: /app/dist/extensions/viktor-audiobooks/index.js'
 
 docker run --rm --network none --read-only \
   --tmpfs /tmp:rw,nosuid,nodev,size=16m \
@@ -233,9 +270,14 @@ The fresh evidence must record:
   which the procedure was run;
 - the exact immutable `OPENCLAW_BASE_IMAGE`, reviewed extension list, donor
   image tag and ID, candidate tag, and candidate image ID;
-- SHA-256 results for the bundled Viktor `index.js` and
-  `openclaw.plugin.json` in both the donor and candidate images, including the
-  successful equality checks;
+- successful source-package checks for the bundled Viktor `package.json` and
+  `openclaw.plugin.json`, plus SHA-256 results for the compiled `package.json`,
+  `index.js`, and `openclaw.plugin.json` in both the donor and candidate images,
+  including the successful equality checks;
+- `openclaw plugins list --enabled --verbose` output showing Viktor as enabled
+  (the human-readable label for its loaded registry record), with
+  `origin: bundled` and source
+  `/app/dist/extensions/viktor-audiobooks/index.js`;
 - Phase 2 validation results for direct release acquisition, absence of the
   separate `Get this book` flow, selected-edition rendering, Telegram card
   length protection, and legacy callback compatibility;
