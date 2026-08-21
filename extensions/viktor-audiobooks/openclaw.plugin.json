@@ -1,6 +1,7 @@
 {
   "id": "viktor-audiobooks",
   "name": "Viktor Audiobooks",
+  "enabledByDefault": true,
   "description": "Deterministic Telegram audiobook requests through the private Audiobook Automation API.",
   "activation": {
     "onStartup": true
