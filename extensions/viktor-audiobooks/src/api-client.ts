@@ -74,7 +74,7 @@ export class ApplicationApi {
     idempotencyKey: string,
   ): Promise<BookRequest> {
     const response = await this.request<FetchResponse<BookRequest>>(
-      `requests/${encodeURIComponent(requestId)}/release-acquisition/`,
+      `requests/${encodeURIComponent(requestId)}/release-selection/`,
       this.controlToken,
       actor,
       { method: "POST", idempotencyKey, body: { candidate_id: candidateId } },

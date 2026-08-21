@@ -1,10 +1,8 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-
 import type { OpenClawPluginApi, PluginCommandContext } from "openclaw/plugin-sdk/core";
-
-import { ApplicationApi } from "./api-client.js";
 import { deriveActor } from "./actor.js";
+import { ApplicationApi } from "./api-client.js";
 import { requestFingerprint } from "./cards.js";
 import {
   ViktorAudiobookController,
@@ -27,19 +25,25 @@ const actorB = `v1.${"B".repeat(43)}`;
 
 class MemoryStore<T> implements KeyedStore<T> {
   readonly values = new Map<string, T>();
-  async register(key: string, value: T): Promise<void> { this.values.set(key, value); }
+  async register(key: string, value: T): Promise<void> {
+    this.values.set(key, value);
+  }
   async registerIfAbsent(key: string, value: T): Promise<boolean> {
     if (this.values.has(key)) return false;
     this.values.set(key, value);
     return true;
   }
-  async lookup(key: string): Promise<T | undefined> { return this.values.get(key); }
+  async lookup(key: string): Promise<T | undefined> {
+    return this.values.get(key);
+  }
   async consume(key: string): Promise<T | undefined> {
     const value = this.values.get(key);
     this.values.delete(key);
     return value;
   }
-  async delete(key: string): Promise<boolean> { return this.values.delete(key); }
+  async delete(key: string): Promise<boolean> {
+    return this.values.delete(key);
+  }
   async entries(): Promise<Array<{ key: string; value: T }>> {
     return [...this.values].map(([key, value]) => ({ key, value }));
   }
@@ -139,8 +143,14 @@ test("rights revocation rejects an old callback without touching Django", async 
   let applicationCalls = 0;
   let reply = "";
   const application = {
-    status: async () => { applicationCalls += 1; throw new Error("must not run"); },
-    control: async () => { applicationCalls += 1; throw new Error("must not run"); },
+    status: async () => {
+      applicationCalls += 1;
+      throw new Error("must not run");
+    },
+    control: async () => {
+      applicationCalls += 1;
+      throw new Error("must not run");
+    },
   } as unknown as ApplicationApi;
   const controller = new ViktorAudiobookController(
     { logger: { warn() {}, error() {} } } as unknown as OpenClawPluginApi,
@@ -163,8 +173,12 @@ test("rights revocation rejects an old callback without touching Django", async 
     auth: { isAuthorizedSender: false },
     callback: { payload: "old", messageId: 11, chatId: "123" },
     respond: {
-      async reply(params) { reply = params.text; },
-      async editMessage() { throw new Error("must not edit"); },
+      async reply(params) {
+        reply = params.text;
+      },
+      async editMessage() {
+        throw new Error("must not edit");
+      },
     },
   });
 
@@ -185,7 +199,10 @@ test("rights revocation rejects future book commands without touching Django", a
       ownerToolEnabled: true,
     },
     {
-      async create() { applicationCalls += 1; throw new Error("must not create"); },
+      async create() {
+        applicationCalls += 1;
+        throw new Error("must not create");
+      },
     } as unknown as ApplicationApi,
     {} as PluginStores,
   );
@@ -223,7 +240,10 @@ test("book cancel refreshes bindings without calling a cancellation control", as
       ownerToolEnabled: true,
     },
     {
-      async control() { controlCalls += 1; throw new Error("must not cancel"); },
+      async control() {
+        controlCalls += 1;
+        throw new Error("must not cancel");
+      },
     } as unknown as ApplicationApi,
     stores,
   );
@@ -262,7 +282,14 @@ test("ambiguous card delivery is never resent automatically", async () => {
     leases: new MemoryStore<{ owner: string; createdAt: number }>(),
   } satisfies PluginStores;
   const controller = new ViktorAudiobookController(
-    { logger: { warn() {}, error() { errors += 1; } } } as unknown as OpenClawPluginApi,
+    {
+      logger: {
+        warn() {},
+        error() {
+          errors += 1;
+        },
+      },
+    } as unknown as OpenClawPluginApi,
     {
       applicationBaseUrl: "https://private.invalid/",
       tailnetOnlyHttp: false,
@@ -272,16 +299,20 @@ test("ambiguous card delivery is never resent automatically", async () => {
       ownerToolEnabled: true,
     },
     {
-      async create() { applicationCalls += 1; throw new Error("must not create"); },
-      async status() { applicationCalls += 1; throw new Error("must not refresh"); },
+      async create() {
+        applicationCalls += 1;
+        throw new Error("must not create");
+      },
+      async status() {
+        applicationCalls += 1;
+        throw new Error("must not refresh");
+      },
     } as unknown as ApplicationApi,
     stores,
   );
 
-  await (controller as unknown as { recoverCreateIntents(): Promise<void> })
-    .recoverCreateIntents();
-  await (controller as unknown as { recoverCreateIntents(): Promise<void> })
-    .recoverCreateIntents();
+  await (controller as unknown as { recoverCreateIntents(): Promise<void> }).recoverCreateIntents();
+  await (controller as unknown as { recoverCreateIntents(): Promise<void> }).recoverCreateIntents();
 
   assert.equal(applicationCalls, 0);
   assert.equal(errors, 1);
@@ -351,13 +382,18 @@ test("ambiguous terminal notification is recorded before send and not retried", 
       actorDerivationSecret: "long-lived-test-identity-secret-value",
       ownerToolEnabled: true,
     },
-    { async status() { return terminalRequest; } } as unknown as ApplicationApi,
+    {
+      async status() {
+        return terminalRequest;
+      },
+    } as unknown as ApplicationApi,
     stores,
   );
 
   const poll = (value: RequestBinding) =>
-    (controller as unknown as { pollBinding(binding: RequestBinding): Promise<void> })
-      .pollBinding(value);
+    (controller as unknown as { pollBinding(binding: RequestBinding): Promise<void> }).pollBinding(
+      value,
+    );
   await poll(binding);
   const recorded = await bindings.lookup(binding.requestId);
   assert.equal(typeof recorded?.terminalNotificationStartedAt, "number");
@@ -368,7 +404,6 @@ test("ambiguous terminal notification is recorded before send and not retried", 
   assert.equal(sends, 1);
   assert.equal(notificationText, "Safe Book: Completed.");
 });
-
 
 const testConfig: PluginConfig = {
   applicationBaseUrl: "https://private.invalid/",
@@ -471,16 +506,11 @@ test("release acquisition uses the control token and callback idempotency key", 
     false,
   );
 
-  const result = await api.releaseAcquisition(
-    actorA,
-    request.id,
-    17,
-    "stable-callback-key",
-  );
+  const result = await api.releaseAcquisition(actorA, request.id, 17, "stable-callback-key");
 
   assert.equal(
     requestedUrl,
-    `https://audiobooks.internal/api/v1/requests/${request.id}/release-acquisition/`,
+    `https://audiobooks.internal/api/v1/requests/${request.id}/release-selection/`,
   );
   assert.equal(requestedInit?.method, "POST");
   const headers = new Headers(requestedInit?.headers);
@@ -526,7 +556,9 @@ test("edition callback acquires immediately and consumes only after API success"
     { logger: { warn() {}, error() {} } } as unknown as OpenClawPluginApi,
     testConfig,
     {
-      async status() { return waiting; },
+      async status() {
+        return waiting;
+      },
       async releaseAcquisition(
         callbackActor: string,
         requestId: string,
@@ -537,7 +569,10 @@ test("edition callback acquires immediately and consumes only after API success"
         assert(await callbacks.lookup("acquire-token"));
         return preflightRequest();
       },
-      async control() { controlCalls += 1; throw new Error("must not use a legacy control"); },
+      async control() {
+        controlCalls += 1;
+        throw new Error("must not use a legacy control");
+      },
     } as unknown as ApplicationApi,
     {
       creates: new MemoryStore<CreateIntent>(),
@@ -554,8 +589,12 @@ test("edition callback acquires immediately and consumes only after API success"
     auth: { isAuthorizedSender: true },
     callback: { payload: "acquire-token", messageId: 52, chatId: senderId },
     respond: {
-      async reply() { throw new Error("must not reply"); },
-      async editMessage(params) { edited = params.text; },
+      async reply() {
+        throw new Error("must not reply");
+      },
+      async editMessage(params) {
+        edited = params.text;
+      },
     },
   });
 
@@ -594,7 +633,9 @@ test("edition callback retry keeps its idempotency key and duplicate success is 
     { logger: { warn() {}, error() {} } } as unknown as OpenClawPluginApi,
     testConfig,
     {
-      async status() { return waiting; },
+      async status() {
+        return waiting;
+      },
       async releaseAcquisition(
         _actor: string,
         _requestId: string,
@@ -621,7 +662,9 @@ test("edition callback retry keeps its idempotency key and duplicate success is 
       auth: { isAuthorizedSender: true },
       callback: { payload: "retry-token", messageId: 53, chatId: senderId },
       respond: {
-        async reply(params) { replies.push(params.text); },
+        async reply(params) {
+          replies.push(params.text);
+        },
         async editMessage() {},
       },
     });
@@ -659,7 +702,10 @@ test("wrong callback actor, chat, message, or thread never reaches the API", asy
     { logger: { warn() {}, error() {} } } as unknown as OpenClawPluginApi,
     testConfig,
     {
-      async status() { applicationCalls += 1; throw new Error("must not read status"); },
+      async status() {
+        applicationCalls += 1;
+        throw new Error("must not read status");
+      },
       async releaseAcquisition() {
         applicationCalls += 1;
         throw new Error("must not acquire");
@@ -693,8 +739,12 @@ test("wrong callback actor, chat, message, or thread never reaches the API", asy
         chatId: callback.chatId,
       },
       respond: {
-        async reply(params) { reply = params.text; },
-        async editMessage() { throw new Error("must not edit"); },
+        async reply(params) {
+          reply = params.text;
+        },
+        async editMessage() {
+          throw new Error("must not edit");
+        },
       },
     });
     assert.match(reply, /expired or belongs to another request/u);
@@ -727,10 +777,20 @@ test("stale legacy fingerprint refreshes safely without authorizing", async () =
     { logger: { warn() {}, error() {} } } as unknown as OpenClawPluginApi,
     testConfig,
     {
-      async status() { return waiting; },
-      async candidates() { return releaseCandidates; },
-      async control() { mutationCalls += 1; throw new Error("must not authorize"); },
-      async releaseAcquisition() { mutationCalls += 1; throw new Error("must not acquire"); },
+      async status() {
+        return waiting;
+      },
+      async candidates() {
+        return releaseCandidates;
+      },
+      async control() {
+        mutationCalls += 1;
+        throw new Error("must not authorize");
+      },
+      async releaseAcquisition() {
+        mutationCalls += 1;
+        throw new Error("must not acquire");
+      },
     } as unknown as ApplicationApi,
     {
       creates: new MemoryStore<CreateIntent>(),
@@ -747,8 +807,12 @@ test("stale legacy fingerprint refreshes safely without authorizing", async () =
     auth: { isAuthorizedSender: true },
     callback: { payload: "stale-token", messageId: 56, chatId: senderId },
     respond: {
-      async reply() { throw new Error("must not reply"); },
-      async editMessage() { edits += 1; },
+      async reply() {
+        throw new Error("must not reply");
+      },
+      async editMessage() {
+        edits += 1;
+      },
     },
   });
 
@@ -780,7 +844,9 @@ test("legacy authorize callback keeps the separate reveal control", async () => 
     { logger: { warn() {}, error() {} } } as unknown as OpenClawPluginApi,
     testConfig,
     {
-      async status() { return waiting; },
+      async status() {
+        return waiting;
+      },
       async control(_actor: string, _requestId: string, action: string) {
         legacyControl = action;
         return preflightRequest();
@@ -837,7 +903,9 @@ test("poll refresh edits a searching card with portable waiting-user controls", 
       logger: { warn() {}, error() {} },
       runtime: {
         gateway: {
-          async isAvailable() { return true; },
+          async isAvailable() {
+            return true;
+          },
           async request(method: string, params: Record<string, unknown>) {
             editMethod = method;
             editRequest = params;
@@ -847,8 +915,12 @@ test("poll refresh edits a searching card with portable waiting-user controls", 
     } as unknown as OpenClawPluginApi,
     testConfig,
     {
-      async status() { return waitingRequest(); },
-      async candidates() { return releaseCandidates; },
+      async status() {
+        return waitingRequest();
+      },
+      async candidates() {
+        return releaseCandidates;
+      },
     } as unknown as ApplicationApi,
     {
       creates: new MemoryStore<CreateIntent>(),
@@ -914,7 +986,9 @@ test("poll refresh rebuilds selected edition status from the API after restart",
       logger: { warn() {}, error() {} },
       runtime: {
         gateway: {
-          async isAvailable() { return true; },
+          async isAvailable() {
+            return true;
+          },
           async request(_method: string, request: Record<string, unknown>) {
             editedText = String((request.params as Record<string, unknown>).content);
           },
@@ -923,7 +997,9 @@ test("poll refresh rebuilds selected edition status from the API after restart",
     } as unknown as OpenClawPluginApi,
     testConfig,
     {
-      async status() { return preflightRequest(); },
+      async status() {
+        return preflightRequest();
+      },
       async candidates() {
         candidateCalls += 1;
         throw new Error("selected edition must come from status");
@@ -975,18 +1051,31 @@ test("failed status edit warns safely, schedules retry, and reports zero refresh
   const controller = new ViktorAudiobookController(
     {
       config: {},
-      logger: { warn(message: string) { warnings.push(message); }, error() {} },
+      logger: {
+        warn(message: string) {
+          warnings.push(message);
+        },
+        error() {},
+      },
       runtime: {
         gateway: {
-          async isAvailable() { return true; },
-          async request() { throw new Error("secret response body and Telegram ids"); },
+          async isAvailable() {
+            return true;
+          },
+          async request() {
+            throw new Error("secret response body and Telegram ids");
+          },
         },
       },
     } as unknown as OpenClawPluginApi,
     testConfig,
     {
-      async status() { return waitingRequest(); },
-      async candidates() { return releaseCandidates; },
+      async status() {
+        return waitingRequest();
+      },
+      async candidates() {
+        return releaseCandidates;
+      },
     } as unknown as ApplicationApi,
     {
       creates: new MemoryStore<CreateIntent>(),
@@ -1040,7 +1129,11 @@ test("create command keeps using the outbound Telegram send path", async () => {
       },
     } as unknown as OpenClawPluginApi,
     testConfig,
-    { async create() { return created; } } as unknown as ApplicationApi,
+    {
+      async create() {
+        return created;
+      },
+    } as unknown as ApplicationApi,
     {
       creates: new MemoryStore<CreateIntent>(),
       bindings,
@@ -1091,9 +1184,15 @@ test("callback refresh keeps using the Telegram context edit path", async () => 
     { logger: { warn() {}, error() {} } } as unknown as OpenClawPluginApi,
     testConfig,
     {
-      async status() { return request; },
-      async control() { return request; },
-      async candidates() { return releaseCandidates; },
+      async status() {
+        return request;
+      },
+      async control() {
+        return request;
+      },
+      async candidates() {
+        return releaseCandidates;
+      },
     } as unknown as ApplicationApi,
     {
       creates: new MemoryStore<CreateIntent>(),
@@ -1110,8 +1209,12 @@ test("callback refresh keeps using the Telegram context edit path", async () => 
     auth: { isAuthorizedSender: true },
     callback: { payload: "callback-token", messageId: 52, chatId: senderId },
     respond: {
-      async reply() { throw new Error("must not reply"); },
-      async editMessage(params) { edited = params; },
+      async reply() {
+        throw new Error("must not reply");
+      },
+      async editMessage(params) {
+        edited = params;
+      },
     },
   });
 
