@@ -123,17 +123,18 @@ function candidatesNeeded(request: BookRequest): boolean {
   return request.job?.stage === "select_release" || request.job?.stage === "select_nzb";
 }
 
-function pollDelay(request: BookRequest): number {
-  if (requestIsTerminal(request)) return Number.POSITIVE_INFINITY;
-  if (request.job?.stage === "monitor_sab") return 60_000;
+function nextPollAt(request: BookRequest): number {
+  // Terminal bindings are skipped by the poller, but persisted state still requires a finite timestamp.
+  if (requestIsTerminal(request)) return Number.MAX_SAFE_INTEGER;
+  if (request.job?.stage === "monitor_sab") return Date.now() + 60_000;
   if (
     request.job?.status === "waiting_user" ||
     request.job?.status === "needs_attention" ||
     request.job?.status === "needs_login"
   ) {
-    return 5 * 60_000;
+    return Date.now() + 5 * 60_000;
   }
-  return 10_000;
+  return Date.now() + 10_000;
 }
 
 function safeFailureText(error: unknown): string {
@@ -378,7 +379,7 @@ export class ViktorAudiobookController {
       route,
       messageId,
       fingerprint: requestFingerprint(request),
-      nextPollAt: Date.now() + pollDelay(request),
+      nextPollAt: nextPollAt(request),
       failureCount: 0,
       terminal: requestIsTerminal(request),
       terminalNotified: false,
@@ -455,7 +456,7 @@ export class ViktorAudiobookController {
         const terminalBinding: RequestBinding = {
           ...binding,
           fingerprint,
-          nextPollAt: Number.MAX_SAFE_INTEGER,
+          nextPollAt: nextPollAt(request),
           failureCount: 0,
           terminal: true,
           terminalNotified: binding.terminalNotified,
@@ -483,7 +484,7 @@ export class ViktorAudiobookController {
       await this.stores.bindings.register(binding.requestId, {
         ...binding,
         fingerprint,
-        nextPollAt: Date.now() + pollDelay(request),
+        nextPollAt: nextPollAt(request),
         failureCount: 0,
         terminal: false,
       });
@@ -567,7 +568,7 @@ export class ViktorAudiobookController {
       await this.stores.bindings.register(request.id, {
         ...existing,
         fingerprint: requestFingerprint(request),
-        nextPollAt: Date.now() + pollDelay(request),
+        nextPollAt: nextPollAt(request),
         failureCount: 0,
         terminal: requestIsTerminal(request),
       });

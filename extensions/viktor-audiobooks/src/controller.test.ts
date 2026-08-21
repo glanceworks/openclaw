@@ -49,6 +49,13 @@ class MemoryStore<T> implements KeyedStore<T> {
   }
 }
 
+class FiniteTimestampStore extends MemoryStore<RequestBinding> {
+  override async register(key: string, value: RequestBinding): Promise<void> {
+    assert(Number.isFinite(value.nextPollAt), "nextPollAt must be finite");
+    await super.register(key, value);
+  }
+}
+
 function intent(requestId: string, messageId: number): CallbackIntent {
   return {
     token: `token-${requestId}`,
@@ -678,6 +685,106 @@ test("edition callback retry keeps its idempotency key and duplicate success is 
   assert.deepEqual(idempotencyKeys, ["stable-acquisition-key", "stable-acquisition-key"]);
   assert.equal(replies.length, 2);
   assert.match(replies[1] ?? "", /expired or belongs to another request/u);
+});
+
+test("stale edition and cancel callbacks persist a finite terminal poll timestamp", async () => {
+  const senderId = "123";
+  const actor = deriveActor(testConfig.actorDerivationSecret, senderId);
+  const waiting = waitingRequest();
+  const terminal: BookRequest = {
+    ...waiting,
+    status: "canceled",
+    status_label: "Canceled",
+    updated_at: "2026-08-19T00:00:04Z",
+    cancel_allowed: false,
+    job: null,
+  };
+  const callbacks = new MemoryStore<CallbackIntent>();
+  const callbackCases = [
+    { token: "edition-terminal-token", action: "acquire_release" as const, candidateId: 17 },
+    { token: "cancel-terminal-token", action: "cancel" as const },
+  ];
+  for (const { token, action, ...candidate } of callbackCases) {
+    await callbacks.register(token, {
+      token,
+      actor,
+      requestId: waiting.id,
+      action,
+      ...candidate,
+      route: { chatId: senderId },
+      messageId: 54,
+      requestFingerprint: requestFingerprint(waiting),
+      idempotencyKey: `${action}-terminal-key`,
+      createdAt: 1,
+    });
+  }
+  const bindings = new FiniteTimestampStore();
+  await bindings.register(waiting.id, {
+    requestId: waiting.id,
+    actor,
+    route: { chatId: senderId },
+    messageId: 54,
+    fingerprint: requestFingerprint(waiting),
+    nextPollAt: 0,
+    failureCount: 0,
+    terminal: false,
+    terminalNotified: false,
+    createdAt: 1,
+  });
+  let mutationCalls = 0;
+  let edits = 0;
+  const replies: string[] = [];
+  const controller = new ViktorAudiobookController(
+    { logger: { warn() {}, error() {} } } as unknown as OpenClawPluginApi,
+    testConfig,
+    {
+      async status() {
+        return terminal;
+      },
+      async releaseAcquisition() {
+        mutationCalls += 1;
+        throw new Error("must not acquire a terminal request");
+      },
+      async control() {
+        mutationCalls += 1;
+        throw new Error("must not cancel a terminal request");
+      },
+    } as unknown as ApplicationApi,
+    {
+      creates: new MemoryStore<CreateIntent>(),
+      bindings,
+      callbacks,
+      leases: new MemoryStore<{ owner: string; createdAt: number }>(),
+    },
+  );
+
+  for (const { token } of callbackCases) {
+    await controller.handleCallback({
+      senderId,
+      accountId: "default",
+      isGroup: false,
+      auth: { isAuthorizedSender: true },
+      callback: { payload: token, messageId: 54, chatId: senderId },
+      respond: {
+        async reply(params) {
+          replies.push(params.text);
+        },
+        async editMessage() {
+          edits += 1;
+        },
+      },
+    });
+  }
+
+  assert.equal(mutationCalls, 0);
+  assert.equal(edits, 2);
+  assert.deepEqual(replies, []);
+  for (const { token } of callbackCases) {
+    assert(await callbacks.lookup(token));
+  }
+  const binding = await bindings.lookup(waiting.id);
+  assert.equal(binding?.terminal, true);
+  assert.equal(binding?.nextPollAt, Number.MAX_SAFE_INTEGER);
 });
 
 test("wrong callback actor, chat, message, or thread never reaches the API", async () => {
