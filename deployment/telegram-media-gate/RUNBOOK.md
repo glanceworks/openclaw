@@ -170,8 +170,11 @@ services:
   openclaw-gateway:
     build:
       context: "$BUILD_CONTEXT"
+    labels:
+      org.opencontainers.image.revision: "$REVIEWED_HEAD"
 EOF
 
+test "$(docker image inspect --format '{{index .Config.Labels "org.opencontainers.image.revision"}}' "$CANDIDATE_TAG")" = "$REVIEWED_HEAD"
 test "$(docker image inspect --format '{{.Architecture}}' "$CANDIDATE_TAG")" = 'amd64'
 test "$(docker image inspect --format '{{.Config.User}}' "$CANDIDATE_TAG")" = 'node'
 test "$(docker image inspect --format '{{json .Config.Entrypoint}}' "$CANDIDATE_TAG")" = \
