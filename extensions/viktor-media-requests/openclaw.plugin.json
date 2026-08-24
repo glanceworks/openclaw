@@ -1,0 +1,53 @@
+{
+  "id": "viktor-media-requests",
+  "name": "Viktor Media Requests",
+  "enabledByDefault": false,
+  "description": "Deterministic private movie and show requests for Viktor on Telegram.",
+  "activation": {
+    "onStartup": true
+  },
+  "configSchema": {
+    "type": "object",
+    "additionalProperties": false,
+    "required": ["tailnetOnlyHttp", "radarr", "sonarr"],
+    "properties": {
+      "tailnetOnlyHttp": {
+        "type": "boolean",
+        "default": false,
+        "description": "Required acknowledgement when either service uses HTTP; deployment must restrict those routes to Tailscale."
+      },
+      "radarr": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["baseUrl", "apiKey", "qualityProfileId", "rootFolderPath", "monitoring"],
+        "properties": {
+          "baseUrl": { "type": "string", "format": "uri" },
+          "apiKey": { "type": "string", "minLength": 1 },
+          "qualityProfileId": { "type": "integer", "minimum": 1 },
+          "rootFolderPath": { "type": "string", "minLength": 1 },
+          "monitoring": { "type": "boolean" }
+        }
+      },
+      "sonarr": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["baseUrl", "apiKey", "qualityProfileId", "rootFolderPath", "monitorNewItems"],
+        "properties": {
+          "baseUrl": { "type": "string", "format": "uri" },
+          "apiKey": { "type": "string", "minLength": 1 },
+          "qualityProfileId": { "type": "integer", "minimum": 1 },
+          "rootFolderPath": { "type": "string", "minLength": 1 },
+          "monitorNewItems": { "type": "string", "enum": ["all", "none"], "description": "Whether Sonarr monitors future seasons; current seasons are monitored and searched." }
+        }
+      }
+    }
+  },
+  "configContracts": {
+    "secretInputs": {
+      "paths": [
+        { "path": "radarr.apiKey", "expected": "string" },
+        { "path": "sonarr.apiKey", "expected": "string" }
+      ]
+    }
+  }
+}

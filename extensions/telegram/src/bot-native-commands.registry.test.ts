@@ -1,7 +1,7 @@
 // Telegram tests cover bot native commands.registry plugin behavior.
 import type { OpenClawConfig } from "openclaw/plugin-sdk/config-contracts";
 import { clearPluginCommands, registerPluginCommand } from "openclaw/plugin-sdk/plugin-runtime";
-import { afterEach, beforeAll, beforeEach, describe, expect, it } from "vitest";
+import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 
 let registerTelegramNativeCommands: typeof import("./bot-native-commands.js").registerTelegramNativeCommands;
 let setActivePluginRegistry: typeof import("openclaw/plugin-sdk/plugin-test-runtime").setActivePluginRegistry;
@@ -88,6 +88,21 @@ function registerPairPluginCommand(params?: {
       handler: async ({ args }) => ({ text: `paired:${args ?? ""}` }),
     }),
   ).toEqual({ ok: true });
+}
+
+function registerMoviePluginCommand() {
+  const handler = vi.fn(async () => ({ text: "movie handler ran" }));
+  expect(
+    registerPluginCommand("viktor-media-requests", {
+      name: "movie",
+      description: "Request a movie through Radarr",
+      acceptsArgs: true,
+      requireAuth: true,
+      channels: ["telegram"],
+      handler,
+    }),
+  ).toEqual({ ok: true });
+  return handler;
 }
 
 async function registerPairMenu(params: {
@@ -284,5 +299,34 @@ describe("registerTelegramNativeCommands real plugin registry", () => {
 
     expectLastDeliveredReplyText("paired:now");
     expect(sendMessage).not.toHaveBeenCalled();
+  });
+
+  it("rejects an unauthorized media command without executing it or exposing pairing", async () => {
+    const { bot, commandHandlers, sendMessage } = createCommandBot();
+    const handler = registerMoviePluginCommand();
+
+    registerTelegramNativeCommands({
+      ...createNativeCommandTestParams({
+        commands: { allowFrom: { telegram: ["999"] } } as OpenClawConfig["commands"],
+      }),
+      bot,
+      allowFrom: ["999"],
+      nativeEnabled: false,
+    });
+
+    const commandHandler = requireCommandHandler(commandHandlers, "movie");
+    await commandHandler(
+      createPrivateCommandContext({ match: "Arrival", userId: 111, chatId: 111 }),
+    );
+
+    expect(handler).not.toHaveBeenCalled();
+    expect(deliverReplies).not.toHaveBeenCalled();
+    expect(sendMessage).toHaveBeenCalledWith(
+      111,
+      "You are not authorized to use this command.",
+      {},
+    );
+    expect(JSON.stringify(sendMessage.mock.calls)).not.toContain("access not configured");
+    expect(JSON.stringify(sendMessage.mock.calls)).not.toContain("pairing code");
   });
 });
