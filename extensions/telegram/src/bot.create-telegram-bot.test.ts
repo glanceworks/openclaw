@@ -2126,6 +2126,53 @@ describe("createTelegramBot", () => {
     }
   });
 
+  it("does not grant conversational DM access from an unreferenced media access group", async () => {
+    onSpy.mockClear();
+    sendMessageSpy.mockClear();
+    replySpy.mockClear();
+    upsertChannelPairingRequest.mockClear();
+    const senderId = 7339717357;
+    const config: TelegramBotOptions["config"] = {
+      accessGroups: {
+        "viktor-media-users": {
+          type: "message.senders",
+          members: { telegram: ["7339717357", "8948449336"] },
+        },
+      },
+      channels: { telegram: { dmPolicy: "pairing" } },
+    };
+    loadConfig.mockReturnValue(config);
+    readChannelAllowFromStore.mockResolvedValue([]);
+    upsertChannelPairingRequest.mockResolvedValue({ code: "PAIRCODE", created: true });
+
+    createTelegramBot({ token: "tok", config });
+    const handler = getOnHandler("message") as (ctx: Record<string, unknown>) => Promise<void>;
+    await handler({
+      message: {
+        chat: { id: senderId, type: "private" },
+        text: "hello",
+        date: 1736380800,
+        from: { id: senderId, username: "media_user" },
+      },
+      me: { username: "openclaw_bot" },
+      getFile: async () => ({ download: async () => new Uint8Array() }),
+    });
+
+    expect(replySpy).not.toHaveBeenCalled();
+    expect(upsertChannelPairingRequest).toHaveBeenCalledWith({
+      channel: "telegram",
+      id: String(senderId),
+      accountId: "default",
+      meta: {
+        username: "media_user",
+        firstName: undefined,
+        lastName: undefined,
+      },
+    });
+    const pairingText = String(sendMessageSpy.mock.calls.at(0)?.[1]);
+    expect(pairingText).toContain("Pairing code:");
+  });
+
   it("sends a friendly retry hint when the pairing allowlist store cannot be read", async () => {
     loadConfig.mockReturnValue({
       channels: { telegram: { dmPolicy: "pairing" } },

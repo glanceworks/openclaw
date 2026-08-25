@@ -15,6 +15,7 @@ import {
   clearPluginInteractiveHandlers,
   dispatchPluginInteractiveHandler,
   registerPluginInteractiveHandler,
+  resolvePluginInteractiveAuthorization,
 } from "./interactive.js";
 import { createEmptyPluginRegistry } from "./registry-empty.js";
 import { resetPluginRuntimeStateForTest, setActivePluginRegistry } from "./runtime.js";
@@ -493,6 +494,35 @@ describe("plugin interactive handlers", () => {
   afterEach(() => {
     vi.restoreAllMocks();
     resetPluginRuntimeStateForTest();
+  });
+
+  it("defaults interactive namespaces to host auth and exposes explicit handler-owned auth", () => {
+    expect(
+      resolvePluginInteractiveAuthorization({ channel: "telegram", data: "missing:payload" }),
+    ).toEqual({ matched: false });
+
+    expect(
+      registerPluginInteractiveHandler("default-auth", {
+        channel: "telegram",
+        namespace: "default-auth",
+        handler: async () => ({ handled: true }),
+      }),
+    ).toEqual({ ok: true });
+    expect(
+      registerPluginInteractiveHandler("handler-auth", {
+        channel: "telegram",
+        namespace: "handler-auth",
+        requireAuth: false,
+        handler: async () => ({ handled: true }),
+      }),
+    ).toEqual({ ok: true });
+
+    expect(
+      resolvePluginInteractiveAuthorization({ channel: "telegram", data: "default-auth:one" }),
+    ).toEqual({ matched: true, requireAuth: true });
+    expect(
+      resolvePluginInteractiveAuthorization({ channel: "telegram", data: "handler-auth:two" }),
+    ).toEqual({ matched: true, requireAuth: false });
   });
 
   it("hydrates legacy interactive state shapes before clearing handlers", async () => {

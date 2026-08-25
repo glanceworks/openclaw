@@ -1702,6 +1702,10 @@ importers:
         version: link:../../packages/plugin-sdk
 
   extensions/viktor-audiobooks:
+    dependencies:
+      '@openclaw/viktor-media-requests':
+        specifier: workspace:*
+        version: link:../viktor-media-requests
     devDependencies:
       '@openclaw/plugin-sdk':
         specifier: workspace:*
@@ -1711,10 +1715,11 @@ importers:
         version: link:../..
 
   extensions/viktor-media-requests:
-    devDependencies:
+    dependencies:
       '@openclaw/plugin-sdk':
         specifier: workspace:*
         version: link:../../packages/plugin-sdk
+    devDependencies:
       openclaw:
         specifier: workspace:*
         version: link:../..

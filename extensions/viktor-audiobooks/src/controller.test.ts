@@ -1,6 +1,10 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import type { OpenClawPluginApi, PluginCommandContext } from "openclaw/plugin-sdk/core";
+import type {
+  OpenClawConfig,
+  OpenClawPluginApi,
+  PluginCommandContext,
+} from "openclaw/plugin-sdk/core";
 import { deriveActor } from "./actor.js";
 import { ApplicationApi } from "./api-client.js";
 import { requestFingerprint } from "./cards.js";
@@ -22,6 +26,17 @@ import type {
 
 const actorA = `v1.${"A".repeat(43)}`;
 const actorB = `v1.${"B".repeat(43)}`;
+
+const mediaAccessConfig = {
+  accessGroups: {
+    "viktor-media-users": {
+      type: "message.senders",
+      members: { telegram: ["7339717357", "8948449336"] },
+    },
+  },
+} satisfies OpenClawConfig;
+
+const actorDerivationSecret = "long-lived-test-identity-secret-value";
 
 class MemoryStore<T> implements KeyedStore<T> {
   readonly values = new Map<string, T>();
@@ -225,6 +240,152 @@ test("rights revocation rejects future book commands without touching Django", a
 
   assert.equal(applicationCalls, 0);
   assert.equal(result.isError, true);
+});
+
+test("Jamie, Michelle, and Brittany can use book without widening canonical access", async () => {
+  let applicationCalls = 0;
+  const stores = {
+    creates: new MemoryStore<CreateIntent>(),
+    bindings: new MemoryStore<RequestBinding>(),
+    callbacks: new MemoryStore<CallbackIntent>(),
+    leases: new MemoryStore<{ owner: string; createdAt: number }>(),
+  } satisfies PluginStores;
+  const controller = new ViktorAudiobookController(
+    {
+      config: mediaAccessConfig,
+      logger: { warn() {}, error() {} },
+    } as unknown as OpenClawPluginApi,
+    testConfig,
+    {
+      async create() {
+        applicationCalls += 1;
+        throw new Error("must not create for status or denied commands");
+      },
+    } as unknown as ApplicationApi,
+    stores,
+  );
+
+  for (const user of [
+    { id: "7426409164", canonical: true },
+    { id: "7339717357", canonical: false },
+    { id: "8948449336", canonical: false },
+  ]) {
+    const result = await controller.handleBookCommand({
+      channel: "telegram",
+      from: `telegram:${user.id}`,
+      to: `telegram:${user.id}`,
+      senderId: user.id,
+      isAuthorizedSender: user.canonical,
+      args: "status",
+    } as PluginCommandContext);
+    assert.match(result.text ?? "", /^Refreshed 0 active audiobook request cards\./u);
+  }
+
+  const unknownId = "8707567979";
+  const denied = await controller.handleBookCommand({
+    channel: "telegram",
+    from: `telegram:${unknownId}`,
+    to: `telegram:${unknownId}`,
+    senderId: unknownId,
+    isAuthorizedSender: false,
+    args: "Safe Book",
+  } as PluginCommandContext);
+  assert.equal(denied.isError, true);
+  assert.equal(applicationCalls, 0);
+});
+
+test("one media user cannot act on another media user's audiobook callback", async () => {
+  let applicationCalls = 0;
+  let reply = "";
+  const callbacks = new MemoryStore<CallbackIntent>();
+  const brittanyId = "8948449336";
+  await callbacks.register("michelle-request", {
+    token: "michelle-request",
+    actor: deriveActor(actorDerivationSecret, "7339717357"),
+    requestId: "request-1",
+    action: "cancel",
+    route: { chatId: brittanyId },
+    messageId: 11,
+    requestFingerprint: "revision-1",
+    idempotencyKey: "idempotency-1",
+    createdAt: 1,
+  });
+  const controller = new ViktorAudiobookController(
+    {
+      config: mediaAccessConfig,
+      logger: { warn() {}, error() {} },
+    } as unknown as OpenClawPluginApi,
+    testConfig,
+    {
+      async status() {
+        applicationCalls += 1;
+        throw new Error("must not load another actor's request");
+      },
+    } as unknown as ApplicationApi,
+    {
+      callbacks,
+      creates: new MemoryStore<CreateIntent>(),
+      bindings: new MemoryStore<RequestBinding>(),
+      leases: new MemoryStore<{ owner: string; createdAt: number }>(),
+    },
+  );
+
+  await controller.handleCallback({
+    senderId: brittanyId,
+    accountId: "default",
+    isGroup: false,
+    auth: { isAuthorizedSender: false },
+    callback: { payload: "michelle-request", messageId: 11, chatId: brittanyId },
+    respond: {
+      async reply(params) {
+        reply = params.text;
+      },
+      async editMessage() {
+        throw new Error("must not edit another actor's request");
+      },
+    },
+  });
+
+  assert.equal(applicationCalls, 0);
+  assert.equal(reply, "That button is expired or belongs to another request.");
+});
+
+test("media-user callbacks still require sender and private chat equality", async () => {
+  let callbackLookups = 0;
+  let reply = "";
+  const controller = new ViktorAudiobookController(
+    {
+      config: mediaAccessConfig,
+      logger: { warn() {}, error() {} },
+    } as unknown as OpenClawPluginApi,
+    testConfig,
+    {} as ApplicationApi,
+    {
+      callbacks: {
+        async lookup() {
+          callbackLookups += 1;
+          return undefined;
+        },
+      },
+    } as unknown as PluginStores,
+  );
+
+  await controller.handleCallback({
+    senderId: "7339717357",
+    accountId: "default",
+    isGroup: false,
+    auth: { isAuthorizedSender: false },
+    callback: { payload: "token", messageId: 11, chatId: "8948449336" },
+    respond: {
+      async reply(params) {
+        reply = params.text;
+      },
+      async editMessage() {},
+    },
+  });
+
+  assert.equal(callbackLookups, 0);
+  assert.equal(reply, "This action is not authorized.");
 });
 
 test("book cancel refreshes bindings without calling a cancellation control", async () => {
@@ -826,10 +987,34 @@ test("wrong callback actor, chat, message, or thread never reaches the API", asy
     },
   );
   const wrongBindings = [
-    { senderId: "456", chatId: senderId, messageId: 54, threadId: 7 },
-    { senderId, chatId: "456", messageId: 54, threadId: 7 },
-    { senderId, chatId: senderId, messageId: 55, threadId: 7 },
-    { senderId, chatId: senderId, messageId: 54, threadId: 8 },
+    {
+      senderId: "456",
+      chatId: senderId,
+      messageId: 54,
+      threadId: 7,
+      expected: /not authorized/u,
+    },
+    {
+      senderId,
+      chatId: "456",
+      messageId: 54,
+      threadId: 7,
+      expected: /not authorized/u,
+    },
+    {
+      senderId,
+      chatId: senderId,
+      messageId: 55,
+      threadId: 7,
+      expected: /expired or belongs to another request/u,
+    },
+    {
+      senderId,
+      chatId: senderId,
+      messageId: 54,
+      threadId: 8,
+      expected: /expired or belongs to another request/u,
+    },
   ];
 
   for (const callback of wrongBindings) {
@@ -854,7 +1039,7 @@ test("wrong callback actor, chat, message, or thread never reaches the API", asy
         },
       },
     });
-    assert.match(reply, /expired or belongs to another request/u);
+    assert.match(reply, callback.expected);
   }
 
   assert.equal(applicationCalls, 0);

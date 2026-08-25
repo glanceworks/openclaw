@@ -22,12 +22,13 @@ const pluginConfig = {
   },
 };
 
-void test("registers authenticated Telegram-only movie and show commands", () => {
+void test("registers Telegram-only movie and show commands with plugin-owned authorization", () => {
   const commands: OpenClawPluginCommandDefinition[] = [];
+  assert.ok(plugin.register);
   plugin.register({
     registrationMode: "full",
     pluginConfig,
-    registerCommand(command) {
+    registerCommand(command: OpenClawPluginCommandDefinition) {
       commands.push(command);
     },
   } as unknown as OpenClawPluginApi);
@@ -40,16 +41,18 @@ void test("registers authenticated Telegram-only movie and show commands", () =>
       channels,
     })),
     [
-      { name: "movie", acceptsArgs: true, requireAuth: true, channels: ["telegram"] },
-      { name: "show", acceptsArgs: true, requireAuth: true, channels: ["telegram"] },
+      { name: "movie", acceptsArgs: true, requireAuth: false, channels: ["telegram"] },
+      { name: "show", acceptsArgs: true, requireAuth: false, channels: ["telegram"] },
     ],
   );
 });
 
 void test("skips backend configuration during tool discovery", () => {
   let registrations = 0;
+  const register = plugin.register;
+  assert.ok(register);
   assert.doesNotThrow(() =>
-    plugin.register({
+    register({
       registrationMode: "tool-discovery",
       pluginConfig: {},
       registerCommand() {

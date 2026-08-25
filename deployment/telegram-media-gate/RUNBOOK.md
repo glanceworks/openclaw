@@ -35,6 +35,123 @@ build context. The provenance/evidence revision is the later commit containing
 the runbook and records that describe the build. It may descend from the
 reviewed source revision and must not be required to have the same commit ID.
 
+## Media-only Telegram authorization
+
+Do not execute this section until the owner explicitly approves the atomic
+media-plugin cutover. Media authorization uses the existing top-level OpenClaw
+access-group surface as its only source of media-only identities:
+
+```json5
+{
+  accessGroups: {
+    "viktor-media-users": {
+      type: "message.senders",
+      members: {
+        telegram: ["7339717357", "8948449336"],
+      },
+    },
+  },
+}
+```
+
+The reviewed identities are:
+
+- `7426409164`: Jamie, canonical/full Viktor user; do not duplicate this ID in
+  the media-only group;
+- `7339717357`: Michelle, media-only;
+- `8948449336`: Brittany, media-only; and
+- `8707567979`: unknown and explicitly unapproved; never add this ID.
+
+The access group grants nothing by itself. Never reference
+`accessGroup:viktor-media-users` from `channels.telegram.allowFrom`,
+`commands.allowFrom.telegram`, or `commands.ownerAllowFrom`; any of those would
+widen non-media access. Only the bundled `viktor-media-requests` and
+`viktor-audiobooks` plugins consume the group directly for `/movie`, `/show`,
+`/book`, and audiobook callback actions. Canonical authorization remains a
+separate sufficient path for full Viktor users.
+
+Access groups do not support per-member labels. Keep names in this reviewed
+operator mapping, but treat only the numeric Telegram IDs in configuration as
+security identities. Changing a name requires no runtime authorization change.
+
+### List media users
+
+```bash
+openclaw config get accessGroups.viktor-media-users.members.telegram --json
+```
+
+### Add a media user
+
+1. List the current array and retain every approved existing ID.
+2. Construct the complete replacement array with the new positive numeric
+   Telegram ID exactly once.
+3. Preview and validate the replacement, then apply the same reviewed value:
+
+```bash
+openclaw config set accessGroups.viktor-media-users.members.telegram \
+  '["7339717357","8948449336","NEW_NUMERIC_TELEGRAM_ID"]' \
+  --strict-json --dry-run
+openclaw config set accessGroups.viktor-media-users.members.telegram \
+  '["7339717357","8948449336","NEW_NUMERIC_TELEGRAM_ID"]' \
+  --strict-json
+openclaw config validate
+```
+
+Serialize operator edits: if the list changes between the read and write,
+discard the candidate array, list again, and rebuild it. The plugin rejects
+usernames and other nonnumeric entries even if the broader access-group schema
+accepts them.
+
+### Remove a media user
+
+1. List the current array.
+2. Construct the complete replacement array without the revoked ID.
+3. Preview, apply, and validate that exact reviewed array:
+
+```bash
+openclaw config set accessGroups.viktor-media-users.members.telegram \
+  '["REMAINING_NUMERIC_ID_1","REMAINING_NUMERIC_ID_2"]' \
+  --strict-json --dry-run
+openclaw config set accessGroups.viktor-media-users.members.telegram \
+  '["REMAINING_NUMERIC_ID_1","REMAINING_NUMERIC_ID_2"]' \
+  --strict-json
+openclaw config validate
+```
+
+An empty reviewed list is `[]`. Do not remove or change canonical pairing or
+owner allowlists as part of a media-user edit.
+
+Media-user additions and removals take effect when the gateway next recreates
+the plugin registry. Schedule that recreation as a separate approved operation;
+do not expect a running plugin instance to hot-reload the group, and do not pair
+the media user as a shortcut.
+
+### Michelle's pending pairing request
+
+Do not approve or delete Michelle's current canonical pairing request during
+this candidate phase or cutover. It does not grant access until approved and it
+expires normally. After media-only canaries pass, verify that Michelle's ID is
+still absent from the canonical Telegram allow-store and owner allowlist. Let
+the pending request expire; do not approve it merely to clear the queue.
+
+### Atomic cutover order
+
+1. Build and validate one immutable candidate containing both updated plugins
+   and the Telegram callback authorization seam.
+2. Stage the exact media access group above and validate the complete config.
+   Because the group is unreferenced by channel/command allowlists, staging it
+   alone grants no access.
+3. In the same approved gateway recreation, disable the legacy `/movie` and
+   `/show` overlay and enable `viktor-media-requests`; keep
+   `viktor-audiobooks` enabled. Do not run both command owners concurrently.
+4. Verify Jamie, Michelle, and Brittany can use all three media commands;
+   verify Michelle and Brittany still cannot use an unrelated command or a
+   normal conversational turn; verify the unknown legacy ID receives the
+   deterministic media denial with no backend call or new pairing challenge.
+5. Roll back the image, plugin enablement, and legacy-overlay ownership as one
+   unit if any canary fails. The unreferenced media access group may remain
+   staged because it grants nothing outside the two media plugins.
+
 ## Completed local Phase 2 validation
 
 The clean `viktor-acquisition-flow` checkout at

@@ -1,10 +1,9 @@
-import { Type } from "typebox";
 import {
   definePluginEntry,
   type OpenClawPluginDefinition,
   type OpenClawPluginToolContext,
 } from "openclaw/plugin-sdk/core";
-
+import { Type } from "typebox";
 import { ApplicationApi } from "./api-client.js";
 import { readPluginConfig } from "./config.js";
 import { ViktorAudiobookController } from "./controller.js";
@@ -52,7 +51,7 @@ const plugin: OpenClawPluginDefinition = definePluginEntry({
       name: "book",
       description: "Request and track an audiobook.",
       acceptsArgs: true,
-      requireAuth: true,
+      requireAuth: false,
       channels: ["telegram"],
       handler: async (ctx) => await controller.handleBookCommand(ctx),
     });
@@ -60,6 +59,7 @@ const plugin: OpenClawPluginDefinition = definePluginEntry({
     api.registerInteractiveHandler({
       channel: "telegram",
       namespace: "vab",
+      requireAuth: false,
       handler: async (ctx: unknown) =>
         await controller.handleCallback(ctx as Parameters<typeof controller.handleCallback>[0]),
     });

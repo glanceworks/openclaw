@@ -4531,6 +4531,64 @@ describe("createTelegramBot", () => {
     expect(observedAuth?.isAuthorizedSender).toBe(true);
   });
 
+  it("lets an auth-owning plugin callback deny an unpaired DM without pairing fallback", async () => {
+    onSpy.mockClear();
+    sendMessageSpy.mockClear();
+    readChannelAllowFromStore.mockResolvedValue([]);
+    let observedAuth: TelegramInteractiveHandlerContext["auth"] | undefined;
+    const handler = vi.fn(async (ctx: TelegramInteractiveHandlerContext) => {
+      observedAuth = ctx.auth;
+      await ctx.respond.reply({ text: "This action is not authorized." });
+      return { handled: true };
+    });
+    registerPluginInteractiveHandler("viktor-audiobooks", {
+      channel: "telegram",
+      namespace: "vab",
+      requireAuth: false,
+      handler: handler as never,
+    });
+
+    const config = {
+      channels: {
+        telegram: {
+          dmPolicy: "pairing",
+          capabilities: { inlineButtons: "dm" },
+        },
+      },
+    } satisfies NonNullable<Parameters<typeof createTelegramBot>[0]["config"]>;
+    loadConfig.mockReturnValue(config);
+    createTelegramBot({ token: "tok", config });
+    const callbackHandler = getOnHandler("callback_query") as (
+      ctx: Record<string, unknown>,
+    ) => Promise<void>;
+
+    await callbackHandler({
+      callbackQuery: {
+        id: "cbq-vab-media-auth",
+        data: "vab:request-token",
+        from: { id: 7339717357, first_name: "Media", username: "media_user" },
+        message: {
+          chat: { id: 7339717357, type: "private" },
+          date: 1736380800,
+          message_id: 25,
+          text: "Audiobook request",
+        },
+      },
+      me: { username: "openclaw_bot" },
+      getFile: async () => ({ download: async () => new Uint8Array() }),
+    });
+
+    expect(handler).toHaveBeenCalledOnce();
+    expect(observedAuth?.isAuthorizedSender).toBe(false);
+    expect(sendMessageSpy).toHaveBeenCalledWith(
+      7339717357,
+      "This action is not authorized.",
+      undefined,
+    );
+    expect(JSON.stringify(sendMessageSpy.mock.calls)).not.toContain("Pairing code:");
+    expect(JSON.stringify(sendMessageSpy.mock.calls)).not.toContain("access not configured");
+  });
+
   it("routes Telegram #General callback payloads as topic 1 when Telegram omits topic metadata", async () => {
     onSpy.mockClear();
     getChatSpy.mockResolvedValue({ id: -100123456789, type: "supergroup", is_forum: true });

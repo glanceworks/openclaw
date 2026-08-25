@@ -2128,6 +2128,12 @@ export type PluginInteractiveRegistration<
 > = {
   channel: TChannel;
   namespace: string;
+  /**
+   * Whether the channel must authorize the sender before invoking this handler (default: true).
+   * A false value transfers authorization to the handler for its matched namespace only; the
+   * channel must not let a declined callback fall through to another callback surface.
+   */
+  requireAuth?: boolean;
   handler: (ctx: TContext) => Promise<TResult> | TResult;
 };
 

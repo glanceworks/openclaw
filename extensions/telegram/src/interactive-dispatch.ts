@@ -2,6 +2,7 @@
 import {
   createInteractiveConversationBindingHelpers,
   dispatchPluginInteractiveHandler,
+  resolvePluginInteractiveAuthorization,
   type PluginConversationBinding,
   type PluginConversationBindingRequestParams,
   type PluginConversationBindingRequestResult,
@@ -78,6 +79,10 @@ type TelegramInteractiveDispatchContext = Omit<
     messageText?: string;
   };
 };
+
+export function resolveTelegramPluginInteractiveAuthorization(data: string) {
+  return resolvePluginInteractiveAuthorization({ channel: "telegram", data });
+}
 
 export async function dispatchTelegramPluginInteractiveHandler(params: {
   data: string;

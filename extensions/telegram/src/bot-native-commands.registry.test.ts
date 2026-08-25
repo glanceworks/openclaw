@@ -91,13 +91,16 @@ function registerPairPluginCommand(params?: {
 }
 
 function registerMoviePluginCommand() {
-  const handler = vi.fn(async () => ({ text: "movie handler ran" }));
+  const handler = vi.fn(async () => ({
+    text: "Media requests are not available for this Telegram account.",
+    isError: true,
+  }));
   expect(
     registerPluginCommand("viktor-media-requests", {
       name: "movie",
       description: "Request a movie through Radarr",
       acceptsArgs: true,
-      requireAuth: true,
+      requireAuth: false,
       channels: ["telegram"],
       handler,
     }),
@@ -301,7 +304,7 @@ describe("registerTelegramNativeCommands real plugin registry", () => {
     expect(sendMessage).not.toHaveBeenCalled();
   });
 
-  it("rejects an unauthorized media command without executing it or exposing pairing", async () => {
+  it("lets a media command deny an unauthorized sender without exposing pairing", async () => {
     const { bot, commandHandlers, sendMessage } = createCommandBot();
     const handler = registerMoviePluginCommand();
 
@@ -319,14 +322,57 @@ describe("registerTelegramNativeCommands real plugin registry", () => {
       createPrivateCommandContext({ match: "Arrival", userId: 111, chatId: 111 }),
     );
 
-    expect(handler).not.toHaveBeenCalled();
+    expect(handler).toHaveBeenCalledOnce();
+    expectLastDeliveredReplyText("Media requests are not available for this Telegram account.");
+    expect(sendMessage).not.toHaveBeenCalled();
+    expect(JSON.stringify(sendMessage.mock.calls)).not.toContain("access not configured");
+    expect(JSON.stringify(sendMessage.mock.calls)).not.toContain("pairing code");
+  });
+
+  it("does not grant unrelated commands from the media access group", async () => {
+    const { bot, commandHandlers, sendMessage } = createCommandBot();
+    const unrelatedHandler = vi.fn(async () => ({ text: "must not run" }));
+    expect(
+      registerPluginCommand("unrelated-plugin", {
+        name: "unrelated",
+        description: "An unrelated Viktor command",
+        acceptsArgs: false,
+        requireAuth: true,
+        channels: ["telegram"],
+        handler: unrelatedHandler,
+      }),
+    ).toEqual({ ok: true });
+    const config = {
+      accessGroups: {
+        "viktor-media-users": {
+          type: "message.senders",
+          members: { telegram: ["7339717357", "8948449336"] },
+        },
+      },
+      commands: { allowFrom: { telegram: ["7426409164"] } },
+    } satisfies OpenClawConfig;
+
+    registerTelegramNativeCommands({
+      ...createNativeCommandTestParams(config),
+      bot,
+      allowFrom: ["7426409164"],
+      nativeEnabled: false,
+    });
+
+    const commandHandler = requireCommandHandler(commandHandlers, "unrelated");
+    await commandHandler(
+      createPrivateCommandContext({
+        userId: 7339717357,
+        chatId: 7339717357,
+      }),
+    );
+
+    expect(unrelatedHandler).not.toHaveBeenCalled();
     expect(deliverReplies).not.toHaveBeenCalled();
     expect(sendMessage).toHaveBeenCalledWith(
-      111,
+      7339717357,
       "You are not authorized to use this command.",
       {},
     );
-    expect(JSON.stringify(sendMessage.mock.calls)).not.toContain("access not configured");
-    expect(JSON.stringify(sendMessage.mock.calls)).not.toContain("pairing code");
   });
 });

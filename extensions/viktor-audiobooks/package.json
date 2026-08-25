@@ -4,6 +4,9 @@
   "private": true,
   "description": "OpenClaw Viktor Audiobooks plugin",
   "type": "module",
+  "dependencies": {
+    "@openclaw/viktor-media-requests": "workspace:*"
+  },
   "devDependencies": {
     "@openclaw/plugin-sdk": "workspace:*",
     "openclaw": "workspace:*"

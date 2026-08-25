@@ -193,6 +193,13 @@ the callback button when inbound policy skips the text or processing fails, so
 the user can retry after the blocking condition changes. This result field is
 Telegram-specific; other channels keep their own interactive result contracts.
 
+Interactive handlers require channel sender authorization by default. A bundled
+handler with its own narrower, deterministic authorization policy can set
+`requireAuth: false` on its registration. The handler must then fail closed for
+every sender it does not explicitly authorize. Channels may invoke only that
+matched namespace before normal sender authorization and must not reinterpret a
+declined callback through another callback surface.
+
 ### Host hooks for workflow plugins
 
 Host hooks are the SDK seams for plugins that need to participate in the host

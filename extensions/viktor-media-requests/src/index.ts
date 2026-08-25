@@ -11,13 +11,16 @@ export const plugin: OpenClawPluginDefinition = definePluginEntry({
     if (api.registrationMode !== "full") {
       return;
     }
-    const controller = new ViktorMediaController(new ArrClient(readPluginConfig(api.pluginConfig)));
+    const controller = new ViktorMediaController(
+      new ArrClient(readPluginConfig(api.pluginConfig)),
+      api.config,
+    );
 
     api.registerCommand({
       name: "movie",
       description: "Request a movie through Radarr.",
       acceptsArgs: true,
-      requireAuth: true,
+      requireAuth: false,
       channels: ["telegram"],
       handler: async (ctx) => await controller.handle("movie", ctx),
     });
@@ -25,7 +28,7 @@ export const plugin: OpenClawPluginDefinition = definePluginEntry({
       name: "show",
       description: "Request a show through Sonarr.",
       acceptsArgs: true,
-      requireAuth: true,
+      requireAuth: false,
       channels: ["telegram"],
       handler: async (ctx) => await controller.handle("show", ctx),
     });

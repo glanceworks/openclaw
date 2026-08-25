@@ -1,4 +1,8 @@
 import { randomUUID } from "node:crypto";
+import {
+  authorizeViktorMediaTelegramSender,
+  VIKTOR_MEDIA_DENIED_RESPONSE,
+} from "@openclaw/viktor-media-requests/api.js";
 import type {
   OpenClawPluginApi,
   PluginCommandContext,
@@ -162,12 +166,21 @@ export class ViktorAudiobookController {
   ) {}
 
   async handleBookCommand(ctx: PluginCommandContext): Promise<PluginCommandResult> {
-    if (!ctx.isAuthorizedSender || !ctx.senderId) {
-      return { text: "This command is not available.", isError: true };
-    }
     const route = directTelegramRoute(ctx);
     if (!route) return { text: "Use /book in a direct Telegram chat with Viktor." };
-    const actor = deriveActor(this.config.actorDerivationSecret, ctx.senderId);
+    const authorization = await authorizeViktorMediaTelegramSender({
+      cfg: this.api.config,
+      channel: ctx.channel,
+      accountId: ctx.accountId,
+      senderId: ctx.senderId,
+      chatId: route.chatId,
+      isGroup: false,
+      canonicalAuthorized: ctx.isAuthorizedSender === true,
+    });
+    if (!authorization.allowed) {
+      return { text: VIKTOR_MEDIA_DENIED_RESPONSE, isError: true };
+    }
+    const actor = deriveActor(this.config.actorDerivationSecret, authorization.telegramId);
     const parsed = parseBookCommand(ctx.args ?? "");
     if (parsed.kind === "help" || parsed.kind === "invalid") {
       return {
@@ -208,11 +221,20 @@ export class ViktorAudiobookController {
   }
 
   async handleCallback(ctx: TelegramInteractiveContext): Promise<{ handled: true }> {
-    if (ctx.isGroup || !ctx.auth.isAuthorizedSender || !ctx.senderId) {
+    const authorization = await authorizeViktorMediaTelegramSender({
+      cfg: this.api.config,
+      channel: "telegram",
+      accountId: ctx.accountId,
+      senderId: ctx.senderId,
+      chatId: ctx.callback.chatId,
+      isGroup: ctx.isGroup,
+      canonicalAuthorized: ctx.auth.isAuthorizedSender,
+    });
+    if (!authorization.allowed) {
       await ctx.respond.reply({ text: "This action is not authorized." });
       return { handled: true };
     }
-    const actor = deriveActor(this.config.actorDerivationSecret, ctx.senderId);
+    const actor = deriveActor(this.config.actorDerivationSecret, authorization.telegramId);
     const intent = await this.stores.callbacks.lookup(ctx.callback.payload);
     if (
       !intent ||
@@ -234,12 +256,13 @@ export class ViktorAudiobookController {
         await this.editFromCallback(ctx, actor, current);
         return { handled: true };
       }
-      if (intent.action === "cancel" && !current.cancel_allowed) {
+      const action = intent.action;
+      if (action === "cancel" && !current.cancel_allowed) {
         await this.editFromCallback(ctx, actor, current);
         return { handled: true };
       }
       let updated: BookRequest;
-      if (intent.action === "acquire_release") {
+      if (action === "acquire_release") {
         if (intent.candidateId === undefined) {
           await this.editFromCallback(ctx, actor, current);
           return { handled: true };
@@ -254,12 +277,14 @@ export class ViktorAudiobookController {
         updated = await this.application.control(
           actor,
           intent.requestId,
-          {
-            select_release: "release-selection",
-            authorize: "reveal-authorization",
-            select_nzb: "nzb-selection",
-            cancel: "cancel",
-          }[intent.action],
+          (
+            {
+              select_release: "release-selection",
+              authorize: "reveal-authorization",
+              select_nzb: "nzb-selection",
+              cancel: "cancel",
+            } as const
+          )[action],
           intent.idempotencyKey,
           intent.candidateId,
         );

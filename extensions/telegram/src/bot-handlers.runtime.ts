@@ -148,7 +148,10 @@ import {
   resolveTelegramEventIngressAuthorization,
 } from "./ingress.js";
 import { resolveTelegramInlineButtonsScope } from "./inline-buttons.js";
-import { dispatchTelegramPluginInteractiveHandler } from "./interactive-dispatch.js";
+import {
+  dispatchTelegramPluginInteractiveHandler,
+  resolveTelegramPluginInteractiveAuthorization,
+} from "./interactive-dispatch.js";
 import {
   buildTelegramConversationContext,
   buildTelegramReplyChain,
@@ -2737,6 +2740,10 @@ export const registerTelegramHandlers = ({
       const callbackCommandText =
         nativeCallbackCommand ?? (opaqueCallbackData ? "" : genericCallbackText);
       const pluginCallbackData = opaqueCallbackData ?? data;
+      const pluginCallbackAuthorization =
+        resolveTelegramPluginInteractiveAuthorization(pluginCallbackData);
+      const pluginOwnsAuthorization =
+        pluginCallbackAuthorization.matched && !pluginCallbackAuthorization.requireAuth;
       const approvalCallback = parseExecApprovalCommandText(
         nativeCallbackCommand ?? (opaqueCallbackData ? "" : data),
       );
@@ -2790,10 +2797,12 @@ export const registerTelegramHandlers = ({
         );
         return;
       }
-      const authorizationMode: TelegramEventAuthorizationMode =
-        !isGroup || (!execApprovalButtonsEnabled && inlineButtonsScope === "allowlist")
-          ? "callback-allowlist"
-          : "callback-scope";
+      const useCallbackAllowlist =
+        !pluginOwnsAuthorization &&
+        (!isGroup || (!execApprovalButtonsEnabled && inlineButtonsScope === "allowlist"));
+      const authorizationMode: TelegramEventAuthorizationMode = useCallbackAllowlist
+        ? "callback-allowlist"
+        : "callback-scope";
       const senderAuthorization = await authorizeTelegramEventSender({
         chatId,
         chatTitle: callbackMessage.chat.title,
@@ -2911,7 +2920,9 @@ export const registerTelegramHandlers = ({
           });
         },
       });
-      if (pluginCallback.handled) {
+      // A handler that owns auth may reject the sender itself. Never reinterpret its
+      // namespace payload as a generic callback if the registration changes mid-dispatch.
+      if (pluginCallback.handled || pluginOwnsAuthorization) {
         return;
       }
 

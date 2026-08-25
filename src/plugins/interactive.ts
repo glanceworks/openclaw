@@ -11,6 +11,10 @@ import {
 } from "./interactive-state.js";
 import { collectLivePluginRegistries } from "./runtime.js";
 
+export type PluginInteractiveAuthorization =
+  | { matched: false }
+  | { matched: true; requireAuth: boolean };
+
 type InteractiveDispatchResult<TResult = unknown> =
   | { matched: false; handled: false; duplicate: false }
   | { matched: true; handled: boolean; duplicate: boolean; result?: TResult };
@@ -53,6 +57,20 @@ function resolveLivePluginInteractiveNamespaceMatch(channel: string, data: strin
     }
   }
   return null;
+}
+
+/** Resolves sender-authorization metadata without invoking or claiming a callback. */
+export function resolvePluginInteractiveAuthorization(params: {
+  channel: string;
+  data: string;
+}): PluginInteractiveAuthorization {
+  const match = resolveLivePluginInteractiveNamespaceMatch(params.channel, params.data);
+  return match
+    ? {
+        matched: true,
+        requireAuth: match.registration.requireAuth !== false,
+      }
+    : { matched: false };
 }
 
 /** Dispatches one interactive callback payload to a matching plugin handler. */

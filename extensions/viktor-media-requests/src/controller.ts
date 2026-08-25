@@ -1,7 +1,10 @@
-import type { PluginCommandContext, PluginCommandResult } from "openclaw/plugin-sdk/core";
+import type {
+  OpenClawConfig,
+  PluginCommandContext,
+  PluginCommandResult,
+} from "openclaw/plugin-sdk/core";
+import { authorizeViktorMediaTelegramSender, VIKTOR_MEDIA_DENIED_RESPONSE } from "../api.js";
 import { ArrApiError, type ArrClient, type MediaKind, type RequestResult } from "./arr-client.js";
-
-const DENIED_RESPONSE = "Media requests are not available for this Telegram account.";
 
 function directTelegramDm(ctx: PluginCommandContext): boolean {
   if (ctx.channel !== "telegram" || !ctx.from || !ctx.to || !ctx.senderId || ctx.from !== ctx.to) {
@@ -62,13 +65,26 @@ function renderFailure(error: unknown, kind: MediaKind): string {
 }
 
 export class ViktorMediaController {
-  constructor(private readonly client: ArrClient) {}
+  constructor(
+    private readonly client: ArrClient,
+    private readonly config: OpenClawConfig,
+  ) {}
 
   async handle(kind: MediaKind, ctx: PluginCommandContext): Promise<PluginCommandResult> {
-    if (!ctx.isAuthorizedSender || !ctx.senderId) {
-      return { text: DENIED_RESPONSE, isError: true };
+    const routeIsDirect = directTelegramDm(ctx);
+    const authorization = await authorizeViktorMediaTelegramSender({
+      cfg: this.config,
+      channel: ctx.channel,
+      accountId: ctx.accountId,
+      senderId: ctx.senderId,
+      chatId: routeIsDirect ? ctx.to : undefined,
+      isGroup: !routeIsDirect,
+      canonicalAuthorized: ctx.isAuthorizedSender === true,
+    });
+    if (!authorization.allowed && authorization.reason === "not-authorized") {
+      return { text: VIKTOR_MEDIA_DENIED_RESPONSE, isError: true };
     }
-    if (!directTelegramDm(ctx)) {
+    if (!authorization.allowed) {
       return { text: `Use ${commandName(kind)} in a direct Telegram chat with Viktor.` };
     }
     const title = (ctx.args ?? "").trim().replace(/\s+/gu, " ");
@@ -83,4 +99,4 @@ export class ViktorMediaController {
   }
 }
 
-export { DENIED_RESPONSE, directTelegramDm, renderFailure, renderResult };
+export { directTelegramDm, renderFailure, renderResult };

@@ -4,8 +4,10 @@
   "private": true,
   "description": "OpenClaw Viktor movie and show request plugin",
   "type": "module",
+  "dependencies": {
+    "@openclaw/plugin-sdk": "workspace:*"
+  },
   "devDependencies": {
-    "@openclaw/plugin-sdk": "workspace:*",
     "openclaw": "workspace:*"
   },
   "peerDependencies": {
